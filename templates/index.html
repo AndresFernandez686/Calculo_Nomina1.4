@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1>Calcula los sueldos de tu equipo en segundos</h1>
+  <p>
+    Sube un archivo Excel o hasta dos PDF de asistencia. El sistema detecta
+    marcaciones duplicadas, completa registros incompletos y aplica feriados,
+    horas especiales y descuentos automáticamente.
+  </p>
+  <div class="hero-badges">
+    <span class="badge">Procesamiento inteligente</span>
+    <span class="badge">Feriados con doble pago</span>
+    <span class="badge">Exportación a Excel</span>
+  </div>
+</section>
+
+<form method="POST" action="{{ url_for('procesar') }}" enctype="multipart/form-data">
+  <div class="grid grid-2">
+    <!-- Columna principal: archivo -->
+    <div class="card">
+      <div class="card-head">
+        <span class="ico" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </span>
+        <h2>Subir archivo de asistencia</h2>
+      </div>
+      <div class="card-body">
+        <div class="toggle">
+          <input type="radio" name="file_type" id="type-excel" value="excel" checked />
+          <label for="type-excel">
+            Archivo Excel
+            <small>Datos estructurados tradicionales</small>
+          </label>
+          <input type="radio" name="file_type" id="type-pdf" value="pdf" />
+          <label for="type-pdf">
+            Archivos PDF
+            <small>Hasta 2 quincenas, lectura automática</small>
+          </label>
+        </div>
+
+        <div class="file-block active" id="block-excel">
+          <div class="dropzone">
+            <label class="field-label" for="excel_file">Selecciona tu archivo .xlsx</label>
+            <input type="file" name="excel_file" id="excel_file" accept=".xlsx" />
+            <p class="hint">
+              Columnas requeridas: Empleado, Fecha, Entrada, Salida, Descuento
+              Inventario, Descuento Caja, Retiro.
+            </p>
+          </div>
+        </div>
+
+        <div class="file-block" id="block-pdf">
+          <div class="dropzone">
+            <label class="field-label" for="pdf_files">Selecciona hasta 2 PDF</label>
+            <input type="file" name="pdf_files" id="pdf_files" accept=".pdf" multiple />
+            <p class="hint">
+              Añade los PDF en orden (primera y segunda quincena). Se ordenan por
+              fecha automáticamente.
+            </p>
+          </div>
+        </div>
+
+        <div class="actions-bar">
+          <button type="submit" class="btn btn-primary btn-block">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+            Procesar y calcular sueldos
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Columna lateral: configuración -->
+    <div class="card">
+      <div class="card-head">
+        <span class="ico" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        <h2>Configuración</h2>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label class="field-label" for="valor_por_hora">Valor por hora</label>
+          <div class="input-money">
+            <span>$</span>
+            <input
+              type="number"
+              name="valor_por_hora"
+              id="valor_por_hora"
+              min="0"
+              step="100"
+              value="{{ valor_default | int }}"
+            />
+          </div>
+          <p class="hint">Se aplica a todas las horas trabajadas.</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Feriados (doble pago)</label>
+          <div class="feriados-grid">
+            <input type="date" name="feriado_1" />
+            <input type="date" name="feriado_2" />
+            <input type="date" name="feriado_3" />
+          </div>
+          <p class="hint">Opcional. Hasta 3 fechas; reciben pago x2.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</form>
+
+<!-- Historial -->
+<div class="section-title">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+  Historial de cálculos
+</div>
+<div class="card">
+  <div class="card-body">
+    {% if runs %}
+      {% for run in runs %}
+        <div class="history-item">
+          <div>
+            <strong>{{ run.source_name or "Cálculo" }}</strong>
+            <span class="badge">{{ run.source_type | upper }}</span>
+            <div class="history-meta">
+              {{ run.created_at.strftime("%d/%m/%Y %H:%M") }} &middot;
+              {{ run.total_registros }} registros &middot;
+              Total: <strong class="money">${{ "{:,.0f}".format(run.total_sueldos) }}</strong>
+            </div>
+          </div>
+          <div class="history-actions">
+            <a class="btn btn-ghost btn-sm" href="{{ url_for('resultado', run_id=run.id) }}">Ver</a>
+            <a class="btn btn-ghost btn-sm" href="{{ url_for('descargar', run_id=run.id) }}">Excel</a>
+            <form method="POST" action="{{ url_for('eliminar', run_id=run.id) }}" onsubmit="return confirm('¿Eliminar este cálculo del historial?');">
+              <button type="submit" class="btn btn-danger-soft btn-sm">Eliminar</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="empty">Aún no hay cálculos. Sube un archivo para comenzar.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const radios = document.querySelectorAll('input[name="file_type"]');
+    const blocks = {
+      excel: document.getElementById("block-excel"),
+      pdf: document.getElementById("block-pdf"),
+    };
+    function sync() {
+      const value = document.querySelector('input[name="file_type"]:checked').value;
+      blocks.excel.classList.toggle("active", value === "excel");
+      blocks.pdf.classList.toggle("active", value === "pdf");
+    }
+    radios.forEach((r) => r.addEventListener("change", sync));
+    sync();
+  })();
+</script>
+{% endblock %}

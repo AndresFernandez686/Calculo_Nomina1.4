@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Calculadora de Sueldos{% endblock %}</title>
+    <meta
+      name="description"
+      content="Sistema profesional de cálculo de sueldos con soporte para Excel y PDF, feriados, horas especiales y descuentos."
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a href="{{ url_for('index') }}" class="brand">
+          <span class="logo" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>
+          </span>
+          <span>
+            Calculadora de Sueldos
+            <small>Gestión de horas y liquidaciones</small>
+          </span>
+        </a>
+        <nav>
+          <a class="topbar-link" href="{{ url_for('index') }}">Inicio</a>
+          <a class="topbar-link" href="{{ url_for('plantilla') }}">Plantilla Excel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+      Calculadora de Sueldos &middot; Horario laboral 10:30&ndash;22:00 &middot; Horas
+      especiales 20:00&ndash;22:00 (+30%) &middot; Feriados x2
+    </footer>
+
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

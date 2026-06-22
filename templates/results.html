@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados &middot; Calculadora de Sueldos{% endblock %}
+
+{% block content %}
+<div class="alert alert-success">
+  <strong>Cálculo completado.</strong> Los sueldos se procesaron correctamente
+  {% if run.feriados %}(feriados: {{ run.feriados }}){% endif %}.
+</div>
+
+<h1 class="page-title">Resumen del cálculo</h1>
+<p class="page-sub">
+  {{ run.source_name or "Cálculo" }} &middot; {{ run.created_at.strftime("%d/%m/%Y %H:%M") }}
+  &middot; Valor por hora: ${{ "{:,.0f}".format(run.valor_por_hora) }}
+</p>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="label">Registros</div>
+    <div class="value">{{ run.total_registros }}</div>
+  </div>
+  <div class="metric">
+    <div class="label">Horas normales</div>
+    <div class="value">{{ run.total_horas_normales | hhmm }}</div>
+  </div>
+  <div class="metric">
+    <div class="label">Horas especiales</div>
+    <div class="value">{{ run.total_horas_especiales | hhmm }}</div>
+  </div>
+  <div class="metric">
+    <div class="label">Total horas</div>
+    <div class="value">{{ run.total_horas | hhmm }}</div>
+  </div>
+  <div class="metric accent">
+    <div class="label">Total sueldos</div>
+    <div class="value">${{ "{:,.0f}".format(run.total_sueldos) }}</div>
+  </div>
+</div>
+
+<div class="actions-bar" style="margin-top: 0;">
+  <a class="btn btn-success" href="{{ url_for('descargar', run_id=run.id) }}">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Descargar reporte en Excel
+  </a>
+  <a class="btn btn-ghost" href="{{ url_for('index') }}">Nuevo cálculo</a>
+</div>
+
+<div class="section-title">Detalle por empleado</div>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Empleado</th>
+        <th>Fecha</th>
+        <th>Entrada</th>
+        <th>Salida</th>
+        <th>Feriado</th>
+        <th>Horas</th>
+        <th>Normales</th>
+        <th>Especiales</th>
+        <th>Desc. Inv.</th>
+        <th>Desc. Caja</th>
+        <th>Retiro</th>
+        <th>Sueldo final</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+        <tr>
+          <td><strong>{{ r.empleado }}</strong></td>
+          <td>{{ r.fecha }}</td>
+          <td>{{ r.entrada }}</td>
+          <td>{{ r.salida }}</td>
+          <td>
+            {% if r.feriado == 'Sí' %}
+              <span class="badge badge-feriado">Feriado</span>
+            {% else %}
+              <span class="muted">No</span>
+            {% endif %}
+          </td>
+          <td>{{ r.horas_trabajadas }}</td>
+          <td>{{ r.horas_normales }}</td>
+          <td>{{ r.horas_especiales }}</td>
+          <td class="muted">${{ "{:,.0f}".format(r.descuento_inventario) }}</td>
+          <td class="muted">${{ "{:,.0f}".format(r.descuento_caja) }}</td>
+          <td class="muted">${{ "{:,.0f}".format(r.retiro) }}</td>
+          <td class="money">${{ "{:,.0f}".format(r.sueldo_final) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

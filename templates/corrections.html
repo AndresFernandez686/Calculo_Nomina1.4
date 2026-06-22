@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Correcciones &middot; Calculadora de Sueldos{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Revisión antes de calcular</h1>
+<p class="page-sub">
+  Detectamos registros que necesitan tu confirmación. Completa los datos y
+  continúa con el cálculo.
+</p>
+
+{% if excluidos %}
+  <div class="alert alert-info">
+    <strong>{{ excluidos }} registro(s) excluido(s) automáticamente.</strong>
+    Empleados sin entrada ni salida (día libre o falta) no se incluyen en el cálculo.
+  </div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('correcciones') }}">
+  {% if incompletos %}
+    <div class="section-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+      Registros incompletos ({{ incompletos | length }})
+    </div>
+    <p class="page-sub">
+      El empleado marcó solo una vez. Indica si esa marca fue entrada o salida y
+      completa el horario faltante.
+    </p>
+
+    {% for item in incompletos %}
+      <div class="correction">
+        <h3>{{ item.empleado }}</h3>
+        <div class="history-meta">
+          {{ item.fecha }} &middot; Horario registrado:
+          <strong>{{ item.horario }}</strong> &middot; {{ item.problema }}
+        </div>
+        <div class="correction-grid">
+          <div>
+            <label class="field-label" for="tipo_{{ item.idx }}">La marca registrada fue</label>
+            <select name="tipo_{{ item.idx }}" id="tipo_{{ item.idx }}">
+              <option value="Entrada" {{ 'selected' if item.dato_faltante == 'Salida' else '' }}>Entrada</option>
+              <option value="Salida" {{ 'selected' if item.dato_faltante == 'Entrada' else '' }}>Salida</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="hora_{{ item.idx }}">Horario faltante</label>
+            <input type="time" name="hora_{{ item.idx }}" id="hora_{{ item.idx }}" required />
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if ambiguos %}
+    <div class="section-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
+      Horarios sospechosos ({{ ambiguos | length }})
+    </div>
+    <p class="page-sub">
+      Estos horarios podrían estar invertidos. Marca la casilla para intercambiar
+      entrada y salida.
+    </p>
+
+    {% for item in ambiguos %}
+      <div class="correction">
+        <h3>{{ item.empleado }}</h3>
+        <div class="history-meta">{{ item.fecha }}</div>
+        <div class="alert alert-warning" style="margin-top: 0.7rem;">{{ item.razon }}</div>
+        <div class="correction-grid">
+          <div>
+            <span class="field-label">Horario actual</span>
+            <p class="muted">Entrada: <strong>{{ item.entrada }}</strong> &middot; Salida: <strong>{{ item.salida }}</strong></p>
+          </div>
+          <div>
+            <label class="checkbox-row" for="intercambiar_{{ item.idx }}">
+              <input type="checkbox" name="intercambiar_{{ item.idx }}" id="intercambiar_{{ item.idx }}" value="1" />
+              Intercambiar entrada y salida
+            </label>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="actions-bar">
+    <button type="submit" class="btn btn-primary">
+      Aplicar correcciones y calcular
+    </button>
+    <a href="{{ url_for('index') }}" class="btn btn-ghost">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
