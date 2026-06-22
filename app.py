@@ -29,7 +29,7 @@ from flask import (
 )
 
 from payroll.data_processor import procesar_datos_excel, validar_archivo_excel
-from payroll.models import CalculationRun, EmployeeRecord, db
+from payroll.models import CalculationRun, Employee, EmployeePayroll, EmployeeRecord, db
 from payroll.pdf_processor import (
     convertir_a_dataframe_estandar,  # noqa: F401  (import keeps API discoverable)
     detectar_horarios_ambiguos,
@@ -183,6 +183,31 @@ def _calcular_y_guardar(df, config):
         record.observaciones = fila.get("Observaciones", "")
         run.records.append(record)
 
+        # Guardar también en la tabla de nómina individual del empleado
+        empleado_nombre = fila["Empleado"]
+        empleado = Employee.query.filter_by(nombre=empleado_nombre).first()
+        if not empleado:
+            empleado = Employee(nombre=empleado_nombre)  # type: ignore[call-arg]
+            db.session.add(empleado)
+            db.session.flush()
+
+        payroll = EmployeePayroll()
+        payroll.employee_id = empleado.id
+        payroll.fecha = fila["Fecha"]
+        payroll.entrada = fila["Entrada"]
+        payroll.salida = fila["Salida"]
+        payroll.feriado = fila["Feriado"]
+        payroll.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
+        payroll.horas_normales = float(fila["Horas Normales"] or 0)
+        payroll.horas_especiales = float(fila["Horas Especiales"] or 0)
+        payroll.descuento_inventario = float(fila["Descuento Inventario"] or 0)
+        payroll.descuento_caja = float(fila["Descuento Caja"] or 0)
+        payroll.retiro = float(fila["Retiro"] or 0)
+        payroll.sueldo_final = float(fila["Sueldo Final"] or 0)
+        payroll.observaciones = fila.get("Observaciones", "")
+        payroll.run_id = run.id
+        db.session.add(payroll)
+
     db.session.add(run)
     db.session.commit()
     return run.id, resultado
@@ -194,13 +219,67 @@ def _calcular_y_guardar(df, config):
 @app.route("/")
 def index():
     runs = (
-        CalculationRun.query.order_by(CalculationRun.created_at.desc()).limit(8).all()
+        CalculationRun.query.order_by(CalculationRun.created_at.desc()).limit(8).all()  # type: ignore[attr-defined]
     )
+    empleados = Employee.query.order_by(Employee.nombre).all()
     return render_template(
         "index.html",
         runs=runs,
+        empleados=empleados,
         valor_default=VALOR_POR_HORA_DEFAULT,
         hoy=datetime.now().strftime("%Y-%m-%d"),
+    )
+
+
+@app.route("/api/empleados", methods=["GET"])
+def api_empleados():
+    """Devuelve la lista de empleados en JSON."""
+    empleados = Employee.query.order_by(Employee.nombre).all()
+    return {
+        "empleados": [{"id": e.id, "nombre": e.nombre} for e in empleados]
+    }
+
+
+@app.route("/api/empleados/crear", methods=["POST"])
+def api_crear_empleado():
+    """Crea un nuevo empleado."""
+    datos = request.get_json()
+    nombre = (datos.get("nombre") or "").strip()
+    
+    if not nombre:
+        return {"success": False, "error": "El nombre es requerido"}, 400
+    
+    empleado_existente = Employee.query.filter_by(nombre=nombre).first()
+    if empleado_existente:
+        return {"success": False, "error": "El empleado ya existe"}, 400
+    
+    empleado = Employee(nombre=nombre)  # type: ignore[call-arg]
+    db.session.add(empleado)
+    db.session.commit()
+    
+    return {
+        "success": True,
+        "empleado": {"id": empleado.id, "nombre": empleado.nombre}
+    }, 201
+
+
+@app.route("/empleado/<int:empleado_id>")
+def ver_empleado(empleado_id):
+    """Muestra la nómina de un empleado."""
+    empleado = db.session.get(Employee, empleado_id)
+    if not empleado:
+        abort(404)
+    
+    registros = (
+        EmployeePayroll.query.filter_by(employee_id=empleado_id)
+        .order_by(EmployeePayroll.created_at.desc())  # type: ignore[attr-defined]
+        .all()
+    )
+    
+    return render_template(
+        "employee_payroll.html",
+        empleado=empleado,
+        registros=registros
     )
 
 
@@ -430,6 +509,15 @@ def eliminar(run_id):
 
 with app.app_context():
     db.create_all()
+    
+    # Crear empleados iniciales si no existen
+    empleados_iniciales = ["Paz Tatiana", "Yanina Gomez"]
+    for nombre in empleados_iniciales:
+        empleado_existente = Employee.query.filter_by(nombre=nombre).first()
+        if not empleado_existente:
+            empleado = Employee(nombre=nombre)  # type: ignore[call-arg]
+            db.session.add(empleado)
+    db.session.commit()
 
 
 if __name__ == "__main__":

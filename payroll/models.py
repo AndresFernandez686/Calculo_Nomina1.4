@@ -5,10 +5,57 @@ Se persisten los cálculos realizados y el detalle por empleado/día,
 de modo que puedan consultarse en el historial.
 """
 from datetime import datetime
+from typing import Optional
 
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+
+
+class Employee(db.Model):
+    """Representa un empleado del sistema."""
+
+    __tablename__ = "employees"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    nombre: str = db.Column(db.String(255), nullable=False, unique=True)
+    created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    payroll_records = db.relationship(
+        "EmployeePayroll",
+        backref="employee",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def __repr__(self):
+        return f"<Employee {self.nombre}>"
+
+
+class EmployeePayroll(db.Model):
+    """Tabla de nómina individual de un empleado."""
+
+    __tablename__ = "employee_payroll"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    employee_id: int = db.Column(
+        db.Integer, db.ForeignKey("employees.id"), nullable=False
+    )
+    created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    fecha: str = db.Column(db.String(20), nullable=False)
+    entrada: Optional[str] = db.Column(db.String(10), nullable=True)
+    salida: Optional[str] = db.Column(db.String(10), nullable=True)
+    feriado: Optional[str] = db.Column(db.String(5), nullable=True)
+    horas_trabajadas: Optional[str] = db.Column(db.String(10), nullable=True)
+    horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
+    horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
+    descuento_inventario: float = db.Column(db.Float, nullable=False, default=0.0)
+    descuento_caja: float = db.Column(db.Float, nullable=False, default=0.0)
+    retiro: float = db.Column(db.Float, nullable=False, default=0.0)
+    sueldo_final: float = db.Column(db.Float, nullable=False, default=0.0)
+    observaciones: Optional[str] = db.Column(db.String(255), nullable=True)
+    run_id: Optional[int] = db.Column(db.Integer, nullable=True)  # Referencia al cálculo que generó este registro
 
 
 class CalculationRun(db.Model):
@@ -16,18 +63,18 @@ class CalculationRun(db.Model):
 
     __tablename__ = "calculation_runs"
 
-    id = db.Column(db.Integer, primary_key=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    source_name = db.Column(db.String(255), nullable=True)
-    source_type = db.Column(db.String(20), nullable=False, default="excel")
-    valor_por_hora = db.Column(db.Float, nullable=False, default=0.0)
-    feriados = db.Column(db.String(255), nullable=True)  # fechas separadas por coma
+    id: int = db.Column(db.Integer, primary_key=True)
+    created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    source_name: Optional[str] = db.Column(db.String(255), nullable=True)
+    source_type: str = db.Column(db.String(20), nullable=False, default="excel")
+    valor_por_hora: float = db.Column(db.Float, nullable=False, default=0.0)
+    feriados: Optional[str] = db.Column(db.String(255), nullable=True)  # fechas separadas por coma
 
-    total_horas = db.Column(db.Float, nullable=False, default=0.0)
-    total_horas_normales = db.Column(db.Float, nullable=False, default=0.0)
-    total_horas_especiales = db.Column(db.Float, nullable=False, default=0.0)
-    total_sueldos = db.Column(db.Float, nullable=False, default=0.0)
-    total_registros = db.Column(db.Integer, nullable=False, default=0)
+    total_horas: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_sueldos: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_registros: int = db.Column(db.Integer, nullable=False, default=0)
 
     records = db.relationship(
         "EmployeeRecord",
@@ -57,21 +104,21 @@ class EmployeeRecord(db.Model):
 
     __tablename__ = "employee_records"
 
-    id = db.Column(db.Integer, primary_key=True)
-    run_id = db.Column(
+    id: int = db.Column(db.Integer, primary_key=True)
+    run_id: int = db.Column(
         db.Integer, db.ForeignKey("calculation_runs.id"), nullable=False
     )
 
-    empleado = db.Column(db.String(255), nullable=False)
-    fecha = db.Column(db.String(20), nullable=False)
-    entrada = db.Column(db.String(10), nullable=True)
-    salida = db.Column(db.String(10), nullable=True)
-    feriado = db.Column(db.String(5), nullable=True)
-    horas_trabajadas = db.Column(db.String(10), nullable=True)
-    horas_normales = db.Column(db.String(10), nullable=True)
-    horas_especiales = db.Column(db.String(10), nullable=True)
-    descuento_inventario = db.Column(db.Float, nullable=False, default=0.0)
-    descuento_caja = db.Column(db.Float, nullable=False, default=0.0)
-    retiro = db.Column(db.Float, nullable=False, default=0.0)
-    sueldo_final = db.Column(db.Float, nullable=False, default=0.0)
-    observaciones = db.Column(db.String(255), nullable=True)
+    empleado: str = db.Column(db.String(255), nullable=False)
+    fecha: str = db.Column(db.String(20), nullable=False)
+    entrada: Optional[str] = db.Column(db.String(10), nullable=True)
+    salida: Optional[str] = db.Column(db.String(10), nullable=True)
+    feriado: Optional[str] = db.Column(db.String(5), nullable=True)
+    horas_trabajadas: Optional[str] = db.Column(db.String(10), nullable=True)
+    horas_normales: Optional[str] = db.Column(db.String(10), nullable=True)
+    horas_especiales: Optional[str] = db.Column(db.String(10), nullable=True)
+    descuento_inventario: float = db.Column(db.Float, nullable=False, default=0.0)
+    descuento_caja: float = db.Column(db.Float, nullable=False, default=0.0)
+    retiro: float = db.Column(db.Float, nullable=False, default=0.0)
+    sueldo_final: float = db.Column(db.Float, nullable=False, default=0.0)
+    observaciones: Optional[str] = db.Column(db.String(255), nullable=True)

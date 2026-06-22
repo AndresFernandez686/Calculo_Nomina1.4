@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1>Nómina de {{ empleado.nombre }}</h1>
+  <p>Historial de sueldos y registros de asistencia</p>
+  <div class="hero-badges">
+    <span class="badge">Total registros: {{ registros | length }}</span>
+  </div>
+</section>
+
+<div class="actions-bar">
+  <a href="{{ url_for('index') }}" class="btn btn-secondary">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    Volver
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <span class="ico" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 3 20 7.5 20 16.5 12 21 4 16.5 4 7.5 12 3"/><polyline points="12 12 20 7.5"/><polyline points="12 12 12 21"/><polyline points="12 12 4 7.5"/></svg>
+    </span>
+    <h2>Registros de nómina</h2>
+  </div>
+  <div class="card-body">
+    {% if registros %}
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background-color: #f5f5f5; border-bottom: 2px solid #ddd;">
+              <th style="padding: 10px; text-align: left;">Fecha</th>
+              <th style="padding: 10px; text-align: left;">Entrada</th>
+              <th style="padding: 10px; text-align: left;">Salida</th>
+              <th style="padding: 10px; text-align: center;">Feriado</th>
+              <th style="padding: 10px; text-align: right;">Horas Normales</th>
+              <th style="padding: 10px; text-align: right;">Horas Especiales</th>
+              <th style="padding: 10px; text-align: right;">Desc. Inv.</th>
+              <th style="padding: 10px; text-align: right;">Desc. Caja</th>
+              <th style="padding: 10px; text-align: right;">Retiro</th>
+              <th style="padding: 10px; text-align: right;">Sueldo Final</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for registro in registros %}
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">{{ registro.fecha }}</td>
+                <td style="padding: 10px;">{{ registro.entrada or "-" }}</td>
+                <td style="padding: 10px;">{{ registro.salida or "-" }}</td>
+                <td style="padding: 10px; text-align: center;">
+                  <span class="badge" style="background-color: {% if registro.feriado == 'S' %}#ff6b6b{% else %}#ddd{% endif %};">
+                    {{ registro.feriado or "N" }}
+                  </span>
+                </td>
+                <td style="padding: 10px; text-align: right;">{{ "%.2f"|format(registro.horas_normales) }}</td>
+                <td style="padding: 10px; text-align: right;">{{ "%.2f"|format(registro.horas_especiales) }}</td>
+                <td style="padding: 10px; text-align: right;">
+                  <strong class="money">{% if registro.descuento_inventario %}${{ "{:,.0f}".format(registro.descuento_inventario) }}{% else %}-{% endif %}</strong>
+                </td>
+                <td style="padding: 10px; text-align: right;">
+                  <strong class="money">{% if registro.descuento_caja %}${{ "{:,.0f}".format(registro.descuento_caja) }}{% else %}-{% endif %}</strong>
+                </td>
+                <td style="padding: 10px; text-align: right;">
+                  <strong class="money">{% if registro.retiro %}${{ "{:,.0f}".format(registro.retiro) }}{% else %}-{% endif %}</strong>
+                </td>
+                <td style="padding: 10px; text-align: right;">
+                  <strong class="money">${{ "{:,.0f}".format(registro.sueldo_final) }}</strong>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Resumen -->
+      <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
+        <h3 style="margin-top: 0;">Resumen</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+          <div>
+            <p style="margin: 0; color: #666; font-size: 0.9em;">Total Horas Normales</p>
+            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">
+              {{ "%.2f"|format(registros | map(attribute='horas_normales') | sum) }}
+            </p>
+          </div>
+          <div>
+            <p style="margin: 0; color: #666; font-size: 0.9em;">Total Horas Especiales</p>
+            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">
+              {{ "%.2f"|format(registros | map(attribute='horas_especiales') | sum) }}
+            </p>
+          </div>
+          <div>
+            <p style="margin: 0; color: #666; font-size: 0.9em;">Total Descuentos</p>
+            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">
+              ${{ "{:,.0f}".format(
+                registros | map(attribute='descuento_inventario') | sum +
+                registros | map(attribute='descuento_caja') | sum +
+                registros | map(attribute='retiro') | sum
+              ) }}
+            </p>
+          </div>
+          <div>
+            <p style="margin: 0; color: #666; font-size: 0.9em;">Sueldo Total Acumulado</p>
+            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold; color: #27ae60;">
+              ${{ "{:,.0f}".format(registros | map(attribute='sueldo_final') | sum) }}
+            </p>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <p class="empty">No hay registros de nómina para este empleado.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

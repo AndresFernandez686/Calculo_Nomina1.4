@@ -15,6 +15,35 @@
   </div>
 </section>
 
+<!-- Selección de empleados -->
+<div class="card">
+  <div class="card-head">
+    <span class="ico" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    </span>
+    <h2>Empleados</h2>
+  </div>
+  <div class="card-body">
+    <div class="field">
+      <label class="field-label" for="empleado_select">Selecciona empleados para ver nómina</label>
+      <select id="empleado_select" multiple size="4">
+        {% for empleado in empleados %}
+          <option value="{{ empleado.id }}">{{ empleado.nombre }}</option>
+        {% endfor %}
+      </select>
+      <p class="hint">Selecciona con Ctrl+Click (Cmd+Click en Mac) para múltiples empleados.</p>
+    </div>
+    <div class="actions-bar">
+      <button type="button" id="btn_ver_empleado" class="btn btn-secondary btn-sm">
+        Ver nómina del empleado
+      </button>
+      <button type="button" id="btn_agregar_empleado" class="btn btn-secondary btn-sm">
+        Agregar nuevo empleado
+      </button>
+    </div>
+  </div>
+</div>
+
 <form method="POST" action="{{ url_for('procesar') }}" enctype="multipart/form-data">
   <div class="grid grid-2">
     <!-- Columna principal: archivo -->
@@ -88,7 +117,7 @@
               name="valor_por_hora"
               id="valor_por_hora"
               min="0"
-              step="100"
+              step="1"
               value="{{ valor_default | int }}"
             />
           </div>
@@ -161,5 +190,42 @@
     radios.forEach((r) => r.addEventListener("change", sync));
     sync();
   })();
+
+  // Manejo de empleados
+  document.getElementById("btn_ver_empleado").addEventListener("click", function() {
+    const select = document.getElementById("empleado_select");
+    const empleado_id = select.value;
+    if (empleado_id) {
+      window.location.href = `/empleado/${empleado_id}`;
+    } else {
+      alert("Por favor selecciona un empleado");
+    }
+  });
+
+  document.getElementById("btn_agregar_empleado").addEventListener("click", function() {
+    const nombre = prompt("Ingresa el nombre del nuevo empleado:");
+    if (nombre && nombre.trim()) {
+      fetch("/api/empleados/crear", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nombre: nombre.trim() })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert(`Empleado "${nombre}" creado exitosamente`);
+          location.reload();
+        } else {
+          alert(`Error: ${data.error}`);
+        }
+      })
+      .catch(error => {
+        console.error("Error:", error);
+        alert("Error al crear el empleado");
+      });
+    }
+  });
 </script>
 {% endblock %}
