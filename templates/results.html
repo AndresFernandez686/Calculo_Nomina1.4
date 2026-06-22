@@ -79,8 +79,8 @@
             {% endif %}
           </td>
           <td>{{ r.horas_trabajadas }}</td>
-          <td>{{ r.horas_normales }}</td>
-          <td>{{ r.horas_especiales }}</td>
+          <td>{{ r.horas_normales | hhmm }}</td>
+          <td>{{ r.horas_especiales | hhmm }}</td>
           <td class="muted">${{ "{:,.0f}".format(r.descuento_inventario) }}</td>
           <td class="muted">${{ "{:,.0f}".format(r.descuento_caja) }}</td>
           <td class="muted">${{ "{:,.0f}".format(r.retiro) }}</td>

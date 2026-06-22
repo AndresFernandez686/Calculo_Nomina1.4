@@ -144,7 +144,6 @@ def procesar_datos_excel(df, valor_por_hora, fechas_feriados):
 def _procesar_fila(row, idx, valor_por_hora, fechas_feriados):
     """
     Procesa una fila individual:
-    - Validación de horario laboral (10:30 - 22:00)
     - Horas normales x tarifa
     - Horas especiales (20:00-22:00) x tarifa x 1.3
     - Factor de feriado x2 si aplica
@@ -158,10 +157,7 @@ def _procesar_fila(row, idx, valor_por_hora, fechas_feriados):
     if salida_dt < entrada_dt:
         salida_dt += timedelta(days=1)
 
-    hora_inicio_laboral = datetime.combine(fecha, datetime.strptime("10:30", "%H:%M").time())
-    hora_fin_laboral = datetime.combine(fecha, datetime.strptime("22:00", "%H:%M").time())
-
-    if entrada_dt < hora_inicio_laboral or entrada_dt > hora_fin_laboral:
+    if salida_dt <= entrada_dt:
         return {
             "datos": {
                 "Empleado": row["Empleado"],
@@ -176,18 +172,13 @@ def _procesar_fila(row, idx, valor_por_hora, fechas_feriados):
                 "Descuento Caja": 0,
                 "Retiro": 0,
                 "Sueldo Final": 0,
-                "Observaciones": "Fuera de horario laboral (10:30-22:00)",
+                "Observaciones": "Horario sin duracion valida",
             },
             "horas": 0,
             "sueldo": 0,
             "horas_normales": 0,
             "horas_especiales": 0,
         }
-
-    if salida_dt > hora_fin_laboral + timedelta(
-        days=1 if salida_dt.date() > entrada_dt.date() else 0
-    ):
-        salida_dt = hora_fin_laboral
 
     horas_trabajadas_decimal = (salida_dt - entrada_dt).total_seconds() / 3600
     horas_normales, horas_especiales = calcular_horas_especiales(entrada_dt, salida_dt)

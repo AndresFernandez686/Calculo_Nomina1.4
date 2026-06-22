@@ -44,6 +44,7 @@ class SmartTimeParser:
             List[Dict]: Lista de fechas y horas encontradas
         """
         resultados = []
+        vistos = set()
         
         # Buscar patrones de fecha y hora juntas
         for patron in self.patrones_fecha_hora:
@@ -56,6 +57,10 @@ class SmartTimeParser:
                 hora_normalizada = self.normalizar_hora(hora_str)
                 
                 if fecha_normalizada and hora_normalizada:
+                    clave = (fecha_normalizada, hora_normalizada, match.start())
+                    if clave in vistos:
+                        continue
+                    vistos.add(clave)
                     resultados.append({
                         'fecha': fecha_normalizada,
                         'hora': hora_normalizada,

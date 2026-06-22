@@ -13,7 +13,7 @@ import os
 import pickle
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, cast
 
 import pandas as pd
@@ -63,7 +63,7 @@ app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
 
 db.init_app(app)
 
-from payroll.calculations import horas_a_horasminutos
+from payroll.calculations import calcular_horas_especiales, horas_a_horasminutos
 
 
 @app.template_filter("hhmm")
@@ -181,6 +181,99 @@ def _hhmm_to_decimal(valor):
         return 0.0
 
 
+def _parsear_feriados_run(run: CalculationRun):
+    fechas = set()
+    if not run.feriados:
+        return fechas
+    for valor in str(run.feriados).split(","):
+        texto = valor.strip()
+        if not texto:
+            continue
+        try:
+            fechas.add(datetime.strptime(texto, "%d/%m/%Y").date())
+        except ValueError:
+            continue
+    return fechas
+
+
+def _registro_tiene_horario_valido(record: EmployeeRecord) -> bool:
+    entrada = str(record.entrada or "").strip()
+    salida = str(record.salida or "").strip()
+    invalidos = {"", "nan", "0:00", "00:00", "none"}
+    return entrada.lower() not in invalidos and salida.lower() not in invalidos
+
+
+def _run_necesita_recalculo(run: CalculationRun, records: list[EmployeeRecord]) -> bool:
+    for record in records:
+        if not _registro_tiene_horario_valido(record):
+            continue
+        observaciones = str(record.observaciones or "").strip().lower()
+        if "entrada ajustada al inicio de la jornada laboral" in observaciones:
+            return True
+        if "salida ajustada al fin de la jornada laboral" in observaciones:
+            return True
+        if str(record.horas_trabajadas or "").strip() == "0:00" and record.sueldo_final == 0:
+            return True
+    return False
+
+
+def _recalcular_run_legado(run: CalculationRun) -> None:
+    records = cast(list[EmployeeRecord], list(getattr(run, "records", []) or []))
+    if not records or not _run_necesita_recalculo(run, records):
+        return
+
+    filas = []
+    for record in records:
+        filas.append(
+            {
+                "Empleado": record.empleado,
+                "Fecha": record.fecha,
+                "Entrada": record.entrada,
+                "Salida": record.salida,
+                "Descuento Inventario": record.descuento_inventario,
+                "Descuento Caja": record.descuento_caja,
+                "Retiro": record.retiro,
+            }
+        )
+
+    resultado = procesar_datos_excel(
+        pd.DataFrame(filas),
+        run.valor_por_hora,
+        _parsear_feriados_run(run),
+    )
+    if len(resultado["resultados"]) != len(records):
+        return
+
+    payroll_rows = cast(
+        list[EmployeePayroll],
+        list(EmployeePayroll.query.filter_by(run_id=run.id).all()),
+    )
+    payroll_rows.sort(key=lambda row: row.id)
+
+    for record, fila in zip(records, resultado["resultados"]):
+        record.feriado = fila["Feriado"]
+        record.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
+        record.horas_normales = _hhmm_to_decimal(fila["Horas Normales"])
+        record.horas_especiales = _hhmm_to_decimal(fila["Horas Especiales"])
+        record.sueldo_final = float(fila["Sueldo Final"] or 0)
+        record.observaciones = fila.get("Observaciones", "")
+
+    for payroll, fila in zip(payroll_rows, resultado["resultados"]):
+        payroll.feriado = fila["Feriado"]
+        payroll.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
+        payroll.horas_normales = _hhmm_to_decimal(fila["Horas Normales"])
+        payroll.horas_especiales = _hhmm_to_decimal(fila["Horas Especiales"])
+        payroll.sueldo_final = float(fila["Sueldo Final"] or 0)
+        payroll.observaciones = fila.get("Observaciones", "")
+
+    run.total_horas = resultado["total_horas"]
+    run.total_horas_normales = resultado["total_horas_normales"]
+    run.total_horas_especiales = resultado["total_horas_especiales"]
+    run.total_sueldos = resultado["total_sueldos"]
+    run.total_registros = len(resultado["resultados"])
+    db.session.commit()
+
+
 def _normalizar_nombre(nombre: str) -> str:
     texto = str(nombre or "").strip().lower()
     texto = texto.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
@@ -195,11 +288,49 @@ def _empleado_coincide(nombre_extraido: str, empleado: Employee) -> bool:
         return False
     if nombre_extraido == nombre_empleado:
         return True
-    if nombre_extraido in nombre_empleado or nombre_empleado in nombre_extraido:
-        return True
-    tokens_extraido = set(nombre_extraido.split())
-    tokens_empleado = set(nombre_empleado.split())
-    return bool(tokens_extraido & tokens_empleado)
+
+    tokens_extraido = nombre_extraido.split()
+    tokens_empleado = nombre_empleado.split()
+
+    if len(tokens_extraido) == 1 and tokens_empleado:
+        return tokens_extraido[0] == tokens_empleado[0]
+    if len(tokens_empleado) == 1 and tokens_extraido:
+        return tokens_empleado[0] == tokens_extraido[0]
+
+    return _tokens_consecutivos(tokens_extraido, tokens_empleado) or _tokens_consecutivos(
+        tokens_empleado,
+        tokens_extraido,
+    )
+
+
+def _tokens_consecutivos(tokens_base: list[str], tokens_objetivo: list[str]) -> bool:
+    if len(tokens_objetivo) > len(tokens_base):
+        return False
+    for indice in range(len(tokens_base) - len(tokens_objetivo) + 1):
+        if tokens_base[indice: indice + len(tokens_objetivo)] == tokens_objetivo:
+            return True
+    return False
+
+
+def _desglose_horas(entrada_texto: str, salida_texto: str) -> dict:
+    entrada_dt = datetime.strptime(entrada_texto, "%H:%M")
+    salida_dt = datetime.strptime(salida_texto, "%H:%M")
+    if salida_dt < entrada_dt:
+        salida_dt += timedelta(days=1)
+
+    horas_totales = (salida_dt - entrada_dt).total_seconds() / 3600.0
+    horas_normales, horas_especiales = calcular_horas_especiales(entrada_dt, salida_dt)
+
+    return {
+        "entrada": entrada_texto,
+        "salida": salida_texto,
+        "horas_totales_decimal": round(horas_totales, 10),
+        "horas_totales_hhmm": horas_a_horasminutos(horas_totales),
+        "horas_normales_decimal": round(horas_normales, 10),
+        "horas_normales_hhmm": horas_a_horasminutos(horas_normales),
+        "horas_especiales_decimal": round(horas_especiales, 10),
+        "horas_especiales_hhmm": horas_a_horasminutos(horas_especiales),
+    }
 
 
 def _calcular_y_guardar(df, config, employee: Employee):
@@ -334,6 +465,39 @@ def api_crear_empleado():
         "success": True,
         "empleado": {"id": empleado.id, "nombre": empleado.nombre}
     }, 201
+
+
+@app.route("/api/validar-horas", methods=["POST"])
+def api_validar_horas():
+    """Valida una resta de horas puntual usando la misma lógica del sistema."""
+    datos = request.get_json(silent=True) or {}
+    entrada = str(datos.get("entrada") or "").strip()
+    salida = str(datos.get("salida") or "").strip()
+
+    if not entrada or not salida:
+        return {
+            "success": False,
+            "error": "Los campos entrada y salida son requeridos en formato HH:MM",
+        }, 400
+
+    try:
+        desglose = _desglose_horas(entrada, salida)
+    except ValueError:
+        return {
+            "success": False,
+            "error": "Formato inválido. Usa HH:MM, por ejemplo 10:10 y 17:10",
+        }, 400
+
+    return {
+        "success": True,
+        "metodo": "resta_exacta_entrada_salida",
+        "fuente_externa": {
+            "url": "https://calculadorasonline.com/calculadora-de-horas-minutos-y-segundos-sumar-horas-restar-horas/",
+            "api_publica_detectada": False,
+            "nota": "La página pública no expone un endpoint API visible; esta respuesta replica la resta exacta usada para contrastar resultados.",
+        },
+        "resultado": desglose,
+    }
 
 
 @app.route("/empleado/<int:empleado_id>")
@@ -552,6 +716,7 @@ def resultado(run_id):
     run = db.session.get(CalculationRun, run_id)
     if not run:
         abort(404)
+    _recalcular_run_legado(run)
     records = cast(list[EmployeeRecord], list(getattr(run, "records", []) or []))
     return render_template("results.html", run=run, records=records)
 
@@ -562,6 +727,7 @@ def descargar(run_id):
     if not run:
         abort(404)
 
+    _recalcular_run_legado(run)
     records = cast(list[EmployeeRecord], list(getattr(run, "records", []) or []))
     filas = []
     for r in records:
@@ -573,8 +739,8 @@ def descargar(run_id):
                 "Salida": r.salida,
                 "Feriado": r.feriado,
                 "Horas Trabajadas (h:mm)": r.horas_trabajadas,
-                "Horas Normales": r.horas_normales,
-                "Horas Especiales": r.horas_especiales,
+                "Horas Normales": horas_a_horasminutos(r.horas_normales),
+                "Horas Especiales": horas_a_horasminutos(r.horas_especiales),
                 "Descuento Inventario": r.descuento_inventario,
                 "Descuento Caja": r.descuento_caja,
                 "Retiro": r.retiro,

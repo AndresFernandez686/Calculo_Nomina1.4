@@ -11,6 +11,9 @@ from typing import Dict, List, Tuple
 import pandas as pd
 
 
+PATRON_FECHA_HORA = re.compile(r"\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?")
+
+
 def procesar_pdf_a_dataframe(archivo_pdf) -> pd.DataFrame:
     """Procesa un archivo PDF y extrae datos de empleados y horarios."""
     try:
@@ -30,13 +33,46 @@ def extraer_texto_pdf(archivo_pdf) -> str:
     """Extrae texto del PDF usando pdfplumber."""
     import pdfplumber
 
-    texto_completo = ""
+    lineas_documento: List[str] = []
     with pdfplumber.open(archivo_pdf) as pdf:
         for pagina in pdf.pages:
+            lineas_tabulares = _extraer_lineas_tabulares(pagina)
+            if lineas_tabulares:
+                lineas_documento.extend(lineas_tabulares)
+                continue
+
             texto_pagina = pagina.extract_text()
             if texto_pagina:
-                texto_completo += texto_pagina + "\n"
-    return texto_completo
+                lineas_documento.extend(texto_pagina.splitlines())
+    return "\n".join(lineas_documento)
+
+
+def _extraer_lineas_tabulares(pagina) -> List[str]:
+    """Convierte tablas del PDF a líneas tabuladas para conservar columnas."""
+    lineas = []
+    for tabla in pagina.extract_tables() or []:
+        for fila in tabla:
+            if not fila:
+                continue
+
+            celdas = [re.sub(r"\s+", " ", str(celda or "")).strip() for celda in fila]
+            celdas_no_vacias = [celda for celda in celdas if celda]
+            if len(celdas_no_vacias) < 2:
+                continue
+
+            linea = "\t".join(celdas)
+            if _parece_fila_asistencia(linea) or _parece_encabezado_tabla(celdas_no_vacias):
+                lineas.append(linea)
+    return lineas
+
+
+def _parece_fila_asistencia(linea: str) -> bool:
+    return bool(PATRON_FECHA_HORA.search(linea))
+
+
+def _parece_encabezado_tabla(celdas: List[str]) -> bool:
+    encabezados = " ".join(celdas).lower()
+    return "nombre" in encabezados and "hora" in encabezados
 
 
 def analizar_estructura_pdf(lineas: List[str]) -> Dict:
@@ -84,6 +120,8 @@ def extraer_datos_segun_estructura(lineas: List[str], estructura: Dict) -> List[
         if not linea:
             continue
 
+        empleado_en_linea = _extraer_nombre_de_linea_tabular(linea)
+
         if re.match(r"Empleado:", linea, re.IGNORECASE):
             empleado_actual = linea.split(":", 1)[1].strip()
             continue
@@ -107,14 +145,14 @@ def extraer_datos_segun_estructura(lineas: List[str], estructura: Dict) -> List[
                 empleado_actual = linea.strip().title()
                 continue
 
-        if not empleado_actual:
-            empleado_tabular = _extraer_nombre_de_linea_tabular(linea)
-            if empleado_tabular:
-                empleado_actual = empleado_tabular
+        if empleado_en_linea:
+            empleado_actual = empleado_en_linea
 
         fechas_horas = parser.extraer_fecha_hora(linea)
         for fh in fechas_horas:
-            if not empleado_actual and posibles_nombres:
+            if empleado_en_linea:
+                nombre_empleado = empleado_en_linea
+            elif not empleado_actual and posibles_nombres:
                 nombre_empleado = posibles_nombres[0]
             else:
                 nombre_empleado = empleado_actual if empleado_actual else "Empleado 1"
@@ -186,7 +224,7 @@ def _extraer_nombre_de_linea_tabular(linea: str) -> str:
     columnas = re.split(r"\s{2,}|\t|\|", linea)
     columnas = [col.strip() for col in columnas if col.strip()]
     if len(columnas) < 2:
-        return ""
+        return _extraer_nombre_de_fila_aplanada(linea)
 
     # Buscar la columna de nombre en la segunda posición cuando hay un identificador antes
     posible_nombre = columnas[1]
@@ -198,7 +236,47 @@ def _extraer_nombre_de_linea_tabular(linea: str) -> str:
     if _es_nombre_de_empleado(posible_nombre):
         return posible_nombre.title()
 
-    return ""
+    return _extraer_nombre_de_fila_aplanada(linea)
+
+
+def _extraer_nombre_de_fila_aplanada(linea: str) -> str:
+    """Respaldo para PDFs donde la tabla se extrae como texto corrido."""
+    match = PATRON_FECHA_HORA.search(linea)
+    if not match:
+        return ""
+
+    prefijo = linea[:match.start()].strip()
+    if not prefijo:
+        return ""
+
+    tokens = prefijo.split()
+    if not tokens:
+        return ""
+
+    if re.fullmatch(r"['`´]?\d+", tokens[0]):
+        tokens = tokens[1:]
+
+    if not tokens:
+        return ""
+
+    candidatos = []
+    for indice, token in enumerate(tokens):
+        token_limpio = token.strip(".,;:-_/\\")
+        if not token_limpio or not re.search(r"[A-Za-zÁÉÍÓÚÑáéíóúñ]", token_limpio):
+            break
+
+        siguiente = tokens[indice + 1] if indice + 1 < len(tokens) else ""
+        if candidatos and siguiente and siguiente[:1].islower():
+            break
+
+        candidatos.append(token_limpio)
+        if len(candidatos) == 3:
+            break
+
+    if not candidatos:
+        return ""
+
+    return " ".join(candidatos).title()
 
 
 def _es_nombre_de_empleado(texto: str) -> bool:
