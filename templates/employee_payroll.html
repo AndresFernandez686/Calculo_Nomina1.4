@@ -24,91 +24,136 @@
     <h2>Registros de nómina</h2>
   </div>
   <div class="card-body">
-    {% if registros %}
-      <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr style="background-color: #f5f5f5; border-bottom: 2px solid #ddd;">
-              <th style="padding: 10px; text-align: left;">Fecha</th>
-              <th style="padding: 10px; text-align: left;">Entrada</th>
-              <th style="padding: 10px; text-align: left;">Salida</th>
-              <th style="padding: 10px; text-align: center;">Feriado</th>
-              <th style="padding: 10px; text-align: right;">Horas Normales</th>
-              <th style="padding: 10px; text-align: right;">Horas Especiales</th>
-              <th style="padding: 10px; text-align: right;">Desc. Inv.</th>
-              <th style="padding: 10px; text-align: right;">Desc. Caja</th>
-              <th style="padding: 10px; text-align: right;">Retiro</th>
-              <th style="padding: 10px; text-align: right;">Sueldo Final</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for registro in registros %}
-              <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 10px;">{{ registro.fecha }}</td>
-                <td style="padding: 10px;">{{ registro.entrada or "-" }}</td>
-                <td style="padding: 10px;">{{ registro.salida or "-" }}</td>
-                <td style="padding: 10px; text-align: center;">
-                  <span class="badge" style="background-color: {% if registro.feriado == 'S' %}#ff6b6b{% else %}#ddd{% endif %};">
-                    {{ registro.feriado or "N" }}
-                  </span>
-                </td>
-                <td style="padding: 10px; text-align: right;">{{ "%.2f"|format(registro.horas_normales) }}</td>
-                <td style="padding: 10px; text-align: right;">{{ "%.2f"|format(registro.horas_especiales) }}</td>
-                <td style="padding: 10px; text-align: right;">
-                  <strong class="money">{% if registro.descuento_inventario %}${{ "{:,.0f}".format(registro.descuento_inventario) }}{% else %}-{% endif %}</strong>
-                </td>
-                <td style="padding: 10px; text-align: right;">
-                  <strong class="money">{% if registro.descuento_caja %}${{ "{:,.0f}".format(registro.descuento_caja) }}{% else %}-{% endif %}</strong>
-                </td>
-                <td style="padding: 10px; text-align: right;">
-                  <strong class="money">{% if registro.retiro %}${{ "{:,.0f}".format(registro.retiro) }}{% else %}-{% endif %}</strong>
-                </td>
-                <td style="padding: 10px; text-align: right;">
-                  <strong class="money">${{ "{:,.0f}".format(registro.sueldo_final) }}</strong>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+    {% if registros_por_mes %}
+      {% for mes in registros_por_mes %}
+        <div class="card month-card">
+          <div class="card-head card-head-accordion">
+            <button
+              type="button"
+              class="accordion-toggle"
+              aria-expanded="false"
+              aria-controls="mes-panel-{{ loop.index }}"
+            >
+              <span>{{ mes.mes_nombre }}</span>
+              <span class="accordion-icon" aria-hidden="true">+</span>
+            </button>
+          </div>
+          <div id="mes-panel-{{ loop.index }}" class="accordion-panel" hidden>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Entrada</th>
+                    <th>Salida</th>
+                    <th style="text-align: center;">Feriado</th>
+                    <th style="text-align: right;">Horas Normales</th>
+                    <th style="text-align: right;">Horas Especiales</th>
+                    <th style="text-align: right;">Desc. Inv.</th>
+                    <th style="text-align: right;">Desc. Caja</th>
+                    <th style="text-align: right;">Retiro</th>
+                    <th style="text-align: right;">Sueldo Final</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for registro in mes.registros %}
+                    <tr>
+                      <td>{{ registro.fecha }}</td>
+                      <td>{{ registro.entrada or "-" }}</td>
+                      <td>{{ registro.salida or "-" }}</td>
+                      <td style="text-align: center;">
+                        <span class="badge" style="background-color: {% if registro.feriado == 'S' %}#ff6b6b{% else %}#ddd{% endif %};">
+                          {{ registro.feriado or "N" }}
+                        </span>
+                      </td>
+                      <td style="text-align: right;">{{ "%.2f"|format(registro.horas_normales) }}</td>
+                      <td style="text-align: right;">{{ "%.2f"|format(registro.horas_especiales) }}</td>
+                      <td style="text-align: right;">
+                        <strong class="money">{% if registro.descuento_inventario %}${{ "{:,.0f}".format(registro.descuento_inventario) }}{% else %}-{% endif %}</strong>
+                      </td>
+                      <td style="text-align: right;">
+                        <strong class="money">{% if registro.descuento_caja %}${{ "{:,.0f}".format(registro.descuento_caja) }}{% else %}-{% endif %}</strong>
+                      </td>
+                      <td style="text-align: right;">
+                        <strong class="money">{% if registro.retiro %}${{ "{:,.0f}".format(registro.retiro) }}{% else %}-{% endif %}</strong>
+                      </td>
+                      <td style="text-align: right;">
+                        <strong class="money">${{ "{:,.0f}".format(registro.sueldo_final) }}</strong>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
 
-      <!-- Resumen -->
-      <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-        <h3 style="margin-top: 0;">Resumen</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-          <div>
-            <p style="margin: 0; color: #666; font-size: 0.9em;">Total Horas Normales</p>
-            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">
-              {{ "%.2f"|format(registros | map(attribute='horas_normales') | sum) }}
-            </p>
-          </div>
-          <div>
-            <p style="margin: 0; color: #666; font-size: 0.9em;">Total Horas Especiales</p>
-            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">
-              {{ "%.2f"|format(registros | map(attribute='horas_especiales') | sum) }}
-            </p>
-          </div>
-          <div>
-            <p style="margin: 0; color: #666; font-size: 0.9em;">Total Descuentos</p>
-            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold;">
-              ${{ "{:,.0f}".format(
-                registros | map(attribute='descuento_inventario') | sum +
-                registros | map(attribute='descuento_caja') | sum +
-                registros | map(attribute='retiro') | sum
-              ) }}
-            </p>
-          </div>
-          <div>
-            <p style="margin: 0; color: #666; font-size: 0.9em;">Sueldo Total Acumulado</p>
-            <p style="margin: 5px 0 0 0; font-size: 1.2em; font-weight: bold; color: #27ae60;">
-              ${{ "{:,.0f}".format(registros | map(attribute='sueldo_final') | sum) }}
-            </p>
+            <div class="month-summary">
+              <div>
+                <p>Total Horas Normales</p>
+                <strong>{{ "%.2f"|format(mes.total_horas_normales) }}</strong>
+              </div>
+              <div>
+                <p>Total Horas Especiales</p>
+                <strong>{{ "%.2f"|format(mes.total_horas_especiales) }}</strong>
+              </div>
+              <div>
+                <p>Sueldo Total</p>
+                <strong>${{ "{:,.0f}".format(mes.total_sueldos) }}</strong>
+              </div>
+            </div>
+            <div class="month-actions">
+              <a
+                class="btn btn-secondary btn-sm"
+                href="{{ url_for('descargar_mes', empleado_id=empleado.id, year=mes.year, month=mes.month, format='xlsx') }}"
+              >
+                Descargar Excel
+              </a>
+              <a
+                class="btn btn-secondary btn-sm"
+                href="{{ url_for('descargar_mes', empleado_id=empleado.id, year=mes.year, month=mes.month, format='pdf') }}"
+              >
+                Descargar PDF
+              </a>
+            </div>
           </div>
         </div>
-      </div>
+      {% endfor %}
     {% else %}
       <p class="empty">No hay registros de nómina para este empleado.</p>
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const accordions = document.querySelectorAll('.month-card .accordion-toggle');
+
+    function closeAllPanels() {
+      accordions.forEach((toggle) => {
+        const panel = document.getElementById(toggle.getAttribute('aria-controls'));
+        if (!panel) return;
+        toggle.setAttribute('aria-expanded', 'false');
+        panel.hidden = true;
+        toggle.querySelector('.accordion-icon').textContent = '+';
+      });
+    }
+
+    accordions.forEach((toggle) => {
+      toggle.addEventListener('click', function () {
+        const panel = document.getElementById(this.getAttribute('aria-controls'));
+        if (!panel) return;
+
+        const isOpen = this.getAttribute('aria-expanded') === 'true';
+        closeAllPanels();
+
+        if (!isOpen) {
+          this.setAttribute('aria-expanded', 'true');
+          panel.hidden = false;
+          this.querySelector('.accordion-icon').textContent = '−';
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}

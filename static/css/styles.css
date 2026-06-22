@@ -534,6 +534,94 @@ tbody tr:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.month-card {
+  margin-top: 1.5rem;
+}
+
+.month-card .card-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+..month-summary {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.month-summary p {
+  margin: 0 0 0.35rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.month-summary strong {
+  display: block;
+  font-size: 1.1rem;
+}
+
+.month-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.month-actions .btn {
+  flex: 1 1 auto;
+}
+
+.month-card {
+  margin-top: 1.5rem;
+}
+
+.card-head-accordion {
+  padding: 0;
+}
+
+.accordion-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.4rem;
+  cursor: pointer;
+  font-size: 1rem;
+  text-align: left;
+  color: inherit;
+}
+
+.accordion-toggle:hover,
+.accordion-toggle:focus-visible {
+  background: var(--surface-2);
+}
+
+.accordion-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.accordion-panel {
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.25s ease;
+}
+
+.accordion-panel[hidden] {
+  display: none;
+}
+
 .muted {
   color: var(--text-muted);
 }

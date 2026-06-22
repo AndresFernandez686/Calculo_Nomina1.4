@@ -96,7 +96,8 @@
         <div class="file-block" id="block-pdf">
           <div class="dropzone">
             <label class="field-label" for="pdf_files">Selecciona hasta 2 PDF</label>
-            <input type="file" name="pdf_files" id="pdf_files" accept=".pdf" multiple />
+            <input type="file" name="pdf_files[]" id="pdf_files" accept=".pdf" multiple />
+            <div id="pdf_files_preview" class="file-preview"></div>
             <p class="hint">
               Añade los PDF en orden (primera y segunda quincena). Se ordenan por
               fecha automáticamente.
@@ -207,6 +208,59 @@
     }
     radios.forEach((r) => r.addEventListener("change", sync));
     sync();
+
+    const pdfInput = document.getElementById("pdf_files");
+    const pdfPreview = document.getElementById("pdf_files_preview");
+    const selectedPdfs = new DataTransfer();
+
+    function renderPdfPreview() {
+      if (!pdfPreview) return;
+      const items = Array.from(selectedPdfs.files);
+      pdfPreview.innerHTML = items.length
+        ? items.map((file, index) => `
+            <div class="file-chip" data-index="${index}">
+              <span>${file.name}</span>
+              <button type="button" class="file-remove" data-index="${index}" aria-label="Eliminar ${file.name}">×</button>
+            </div>
+          `).join("")
+        : "<p class='hint'>Aún no has seleccionado archivos.</p>";
+    }
+
+    function updatePdfFiles() {
+      pdfInput.files = selectedPdfs.files;
+      renderPdfPreview();
+    }
+
+    if (pdfInput) {
+      pdfInput.addEventListener("change", function () {
+        const nuevos = Array.from(this.files);
+        for (const file of nuevos) {
+          if (selectedPdfs.files.length >= 2) {
+            break;
+          }
+          const existe = Array.from(selectedPdfs.files).some(
+            (existente) => existente.name === file.name && existente.size === file.size
+          );
+          if (!existe) {
+            selectedPdfs.items.add(file);
+          }
+        }
+        this.value = "";
+        updatePdfFiles();
+      });
+    }
+
+    document.addEventListener("click", function (event) {
+      const removeButton = event.target.closest(".file-remove");
+      if (!removeButton) return;
+      const index = Number(removeButton.dataset.index);
+      const nuevos = Array.from(selectedPdfs.files).filter((_, idx) => idx !== index);
+      selectedPdfs.clearData();
+      nuevos.forEach((file) => selectedPdfs.items.add(file));
+      updatePdfFiles();
+    });
+
+    renderPdfPreview();
   })();
 
   // Manejo de empleados

@@ -28,6 +28,11 @@ from flask import (
     session,
     url_for,
 )
+from openpyxl.styles import Font
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import landscape, letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy import desc, inspect, text
 
 from payroll.data_processor import procesar_datos_excel, validar_archivo_excel
@@ -149,11 +154,219 @@ def _df_ambiguos_a_lista(df_ambiguos):
     return items
 
 
+MESES_ES = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
+
+
+def _agrupar_registros_por_mes(registros):
+    meses = {}
+    for registro in registros:
+        fecha_str = getattr(registro, "fecha", "")
+        try:
+            fecha_dt = datetime.strptime(fecha_str, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            continue
+
+        clave = (fecha_dt.year, fecha_dt.month)
+        if clave not in meses:
+            meses[clave] = {
+                "year": fecha_dt.year,
+                "month": fecha_dt.month,
+                "mes_nombre": f"{MESES_ES[fecha_dt.month - 1]} {fecha_dt.year}",
+                "registros": [],
+                "total_horas_normales": 0.0,
+                "total_horas_especiales": 0.0,
+                "total_sueldos": 0.0,
+            }
+
+        meses[clave]["registros"].append(registro)
+        meses[clave]["total_horas_normales"] += float(registro.horas_normales or 0)
+        meses[clave]["total_horas_especiales"] += float(registro.horas_especiales or 0)
+        meses[clave]["total_sueldos"] += float(registro.sueldo_final or 0)
+
+    return [meses[clave] for clave in sorted(meses.keys(), reverse=True)]
+
+
+def _filtrar_registros_por_mes(registros, year, month):
+    filtrados = []
+    for registro in registros:
+        fecha_str = getattr(registro, "fecha", "")
+        try:
+            fecha_dt = datetime.strptime(fecha_str, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            continue
+        if fecha_dt.year == year and fecha_dt.month == month:
+            filtrados.append(registro)
+    return filtrados
+
+
 def _fecha_str(valor):
     try:
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except Exception:  # noqa: BLE001
         return str(valor)
+
+
+def _sanear_nombre_para_archivo(nombre: str) -> str:
+    texto = re.sub(r"[^\w\-]+", "_", nombre.strip(), flags=re.UNICODE)
+    texto = re.sub(r"_+", "_", texto).strip("_")
+    return texto or "empleado"
+
+
+def _generar_df_desde_registros(registros):
+    filas = []
+    for r in registros:
+        filas.append(
+            {
+                "Fecha": r.fecha,
+                "Entrada": r.entrada,
+                "Salida": r.salida,
+                "Feriado": r.feriado,
+                "Horas Trabajadas (h:mm)": r.horas_trabajadas,
+                "Horas Normales": horas_a_horasminutos(r.horas_normales),
+                "Horas Especiales": horas_a_horasminutos(r.horas_especiales),
+                "Descuento Inventario": r.descuento_inventario,
+                "Descuento Caja": r.descuento_caja,
+                "Retiro": r.retiro,
+                "Sueldo Final": r.sueldo_final,
+            }
+        )
+    return pd.DataFrame(filas)
+
+
+def _crear_pdf_desde_registros(registros, empleado_nombre, mes_nombre):
+    df = _generar_df_desde_registros(registros)
+    resumen = {
+        "total_horas_normales": sum(float(r.horas_normales or 0) for r in registros),
+        "total_horas_especiales": sum(float(r.horas_especiales or 0) for r in registros),
+        "total_sueldos": sum(float(r.sueldo_final or 0) for r in registros),
+    }
+
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(
+        output,
+        pagesize=landscape(letter),
+        rightMargin=24,
+        leftMargin=24,
+        topMargin=24,
+        bottomMargin=24,
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph(f"{empleado_nombre} — {mes_nombre}", styles["Heading2"]))
+    story.append(Spacer(1, 12))
+
+    columnas = [
+        "Fecha",
+        "Entrada",
+        "Salida",
+        "Feriado",
+        "Horas Normales",
+        "Horas Especiales",
+        "Desc. Inv.",
+        "Desc. Caja",
+        "Retiro",
+        "Sueldo Final",
+    ]
+    datos = [columnas]
+    for _, fila in df.iterrows():
+        datos.append(
+            [
+                fila["Fecha"],
+                fila["Entrada"] or "-",
+                fila["Salida"] or "-",
+                fila["Feriado"] or "-",
+                fila["Horas Normales"],
+                fila["Horas Especiales"],
+                f"${fila['Descuento Inventario']:.0f}" if fila["Descuento Inventario"] else "-",
+                f"${fila['Descuento Caja']:.0f}" if fila["Descuento Caja"] else "-",
+                f"${fila['Retiro']:.0f}" if fila["Retiro"] else "-",
+                f"${fila['Sueldo Final']:.0f}",
+            ]
+        )
+
+    tabla = Table(datos, repeatRows=1, hAlign="LEFT")
+    tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f5f5f5")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#3a485d")),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("ALIGN", (0, 1), (0, -1), "LEFT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d7d7d7")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7d7d7")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ]
+        )
+    )
+    story.append(tabla)
+    story.append(Spacer(1, 16))
+
+    resumen_tabla = Table(
+        [
+            ["Total Horas Normales", f"{resumen['total_horas_normales']:.2f}"],
+            ["Total Horas Especiales", f"{resumen['total_horas_especiales']:.2f}"],
+            ["Sueldo Total", f"${resumen['total_sueldos']:.0f}"],
+        ],
+        hAlign="LEFT",
+        colWidths=[150, 120],
+    )
+    resumen_tabla.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f9f9f9")),
+                ("BOX", (0, 0), (-1, -1), 0.25, colors.HexColor("#d7d7d7")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d7d7d7")),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ]
+        )
+    )
+    story.append(resumen_tabla)
+
+    doc.build(story)
+    output.seek(0)
+    return output
+
+
+def _crear_excel_desde_registros(registros, empleado_nombre, mes_nombre):
+    df = _generar_df_desde_registros(registros)
+    resumen = {
+        "total_horas_normales": sum(float(r.horas_normales or 0) for r in registros),
+        "total_horas_especiales": sum(float(r.horas_especiales or 0) for r in registros),
+        "total_sueldos": sum(float(r.sueldo_final or 0) for r in registros),
+    }
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sueldos")
+        workbook = writer.book
+        worksheet = writer.sheets["Sueldos"]
+
+        fila_inicio = len(df) + 3
+        bold = Font(bold=True)
+        worksheet.cell(row=fila_inicio, column=1, value="Total Horas Normales").font = bold
+        worksheet.cell(row=fila_inicio, column=2, value=resumen["total_horas_normales"]).font = bold
+        worksheet.cell(row=fila_inicio + 1, column=1, value="Total Horas Especiales").font = bold
+        worksheet.cell(row=fila_inicio + 1, column=2, value=resumen["total_horas_especiales"]).font = bold
+        worksheet.cell(row=fila_inicio + 2, column=1, value="Sueldo Total").font = bold
+        worksheet.cell(row=fila_inicio + 2, column=2, value=resumen["total_sueldos"]).font = bold
+
+    output.seek(0)
+    return output
 
 
 def _hhmm_to_decimal(valor):
@@ -512,11 +725,49 @@ def ver_empleado(empleado_id):
         .order_by(desc(EmployeePayroll.created_at))
         .all()
     )
+    registros_por_mes = _agrupar_registros_por_mes(registros)
     
     return render_template(
         "employee_payroll.html",
         empleado=empleado,
-        registros=registros
+        registros=registros,
+        registros_por_mes=registros_por_mes,
+    )
+
+
+@app.route("/empleado/<int:empleado_id>/descargar_mes/<int:year>/<int:month>")
+def descargar_mes(empleado_id, year, month):
+    empleado = db.session.get(Employee, empleado_id)
+    if not empleado:
+        abort(404)
+
+    registros = (
+        EmployeePayroll.query.filter_by(employee_id=empleado_id)
+        .order_by(desc(EmployeePayroll.created_at))
+        .all()
+    )
+    registros_mes = _filtrar_registros_por_mes(registros, year, month)
+    if not registros_mes:
+        abort(404)
+
+    formato = request.args.get("format", "xlsx").lower()
+    mes_nombre = f"{MESES_ES[month - 1]} {year}"
+    base_nombre = _sanear_nombre_para_archivo(f"{empleado.nombre}_{mes_nombre}")
+
+    if formato == "pdf":
+        contenido = _crear_pdf_desde_registros(registros_mes, empleado.nombre, mes_nombre)
+        mimetype = "application/pdf"
+        nombre_archivo = f"{base_nombre}.pdf"
+    else:
+        contenido = _crear_excel_desde_registros(registros_mes, empleado.nombre, mes_nombre)
+        mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        nombre_archivo = f"{base_nombre}.xlsx"
+
+    return send_file(
+        contenido,
+        mimetype=mimetype,
+        as_attachment=True,
+        download_name=nombre_archivo,
     )
 
 
@@ -556,7 +807,7 @@ def procesar():
     # --- Leer archivo(s) -------------------------------------------------- #
     try:
         if tipo_archivo == "pdf":
-            archivos = request.files.getlist("pdf_files")
+            archivos = request.files.getlist("pdf_files") or request.files.getlist("pdf_files[]")
             archivos = [a for a in archivos if a and a.filename]
             if not archivos:
                 flash("No se cargó ningún archivo PDF.", "error")
@@ -811,15 +1062,15 @@ def _ensure_missing_employee_columns():
 with app.app_context():
     db.create_all()
     _ensure_missing_employee_columns()
-    
-    # Crear empleados iniciales si no existen
-    empleados_iniciales = ["Paz", "Yanina Gomez"]
-    for nombre in empleados_iniciales:
-        empleado_existente = Employee.query.filter_by(nombre=nombre).first()
-        if not empleado_existente:
+
+    # Crear empleados iniciales solo si la tabla de empleados está vacía.
+    # Esto evita que un empleado eliminado vuelva a aparecer al reiniciar la aplicación.
+    if Employee.query.count() == 0:
+        empleados_iniciales = ["Paz", "Yanina Gomez"]
+        for nombre in empleados_iniciales:
             empleado = Employee(nombre=nombre)  # type: ignore[call-arg]
             db.session.add(empleado)
-    db.session.commit()
+        db.session.commit()
 
 
 if __name__ == "__main__":
