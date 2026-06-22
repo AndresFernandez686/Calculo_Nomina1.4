@@ -11,9 +11,10 @@ Migración completa desde Streamlit a Flask manteniendo toda la lógica de negoc
 import io
 import os
 import pickle
+import re
 import uuid
 from datetime import datetime
-from typing import cast
+from typing import Optional, cast
 
 import pandas as pd
 from flask import (
@@ -27,9 +28,17 @@ from flask import (
     session,
     url_for,
 )
+from sqlalchemy import desc, inspect, text
 
 from payroll.data_processor import procesar_datos_excel, validar_archivo_excel
-from payroll.models import CalculationRun, Employee, EmployeePayroll, EmployeeRecord, db
+from payroll.models import (
+    CalculationRun,
+    Employee,
+    EmployeeAttendance,
+    EmployeePayroll,
+    EmployeeRecord,
+    db,
+)
 from payroll.pdf_processor import (
     convertir_a_dataframe_estandar,  # noqa: F401  (import keeps API discoverable)
     detectar_horarios_ambiguos,
@@ -147,11 +156,58 @@ def _fecha_str(valor):
         return str(valor)
 
 
-def _calcular_y_guardar(df, config):
+def _hhmm_to_decimal(valor):
+    if valor is None or pd.isna(valor):
+        return 0.0
+    if isinstance(valor, (int, float)):
+        try:
+            return float(valor)
+        except (TypeError, ValueError):
+            return 0.0
+    texto = str(valor).strip()
+    if not texto or texto.lower() in {"nan", "nat", "none"}:
+        return 0.0
+    if ":" in texto:
+        partes = texto.split(":", 1)
+        try:
+            horas = float(partes[0])
+            minutos = float(partes[1])
+            return horas + minutos / 60.0
+        except ValueError:
+            return 0.0
+    try:
+        return float(texto)
+    except ValueError:
+        return 0.0
+
+
+def _normalizar_nombre(nombre: str) -> str:
+    texto = str(nombre or "").strip().lower()
+    texto = texto.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
+    texto = re.sub(r"[^a-z0-9\s]", "", texto)
+    return " ".join(texto.split())
+
+
+def _empleado_coincide(nombre_extraido: str, empleado: Employee) -> bool:
+    nombre_extraido = _normalizar_nombre(nombre_extraido)
+    nombre_empleado = _normalizar_nombre(empleado.nombre)
+    if not nombre_extraido or not nombre_empleado:
+        return False
+    if nombre_extraido == nombre_empleado:
+        return True
+    if nombre_extraido in nombre_empleado or nombre_empleado in nombre_extraido:
+        return True
+    tokens_extraido = set(nombre_extraido.split())
+    tokens_empleado = set(nombre_empleado.split())
+    return bool(tokens_extraido & tokens_empleado)
+
+
+def _calcular_y_guardar(df, config, employee: Employee):
     """Ejecuta el cálculo y guarda el resultado en la base de datos."""
     resultado = procesar_datos_excel(df, config["valor_por_hora"], set(config["feriados"]))
 
     run = CalculationRun()
+    run.employee_id = employee.id
     run.source_name = config.get("source_name")
     run.source_type = config.get("source_type", "excel")
     run.valor_por_hora = config["valor_por_hora"]
@@ -166,40 +222,37 @@ def _calcular_y_guardar(df, config):
     run.total_sueldos = resultado["total_sueldos"]
     run.total_registros = len(resultado["resultados"])
 
+    db.session.add(run)
+    db.session.flush()
+
     for fila in resultado["resultados"]:
         record = EmployeeRecord()
+        record.run_id = run.id
+        record.employee_id = employee.id
         record.empleado = fila["Empleado"]
         record.fecha = fila["Fecha"]
         record.entrada = fila["Entrada"]
         record.salida = fila["Salida"]
         record.feriado = fila["Feriado"]
         record.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
-        record.horas_normales = fila["Horas Normales"]
-        record.horas_especiales = fila["Horas Especiales"]
+        record.horas_normales = _hhmm_to_decimal(fila["Horas Normales"])
+        record.horas_especiales = _hhmm_to_decimal(fila["Horas Especiales"])
         record.descuento_inventario = float(fila["Descuento Inventario"] or 0)
         record.descuento_caja = float(fila["Descuento Caja"] or 0)
         record.retiro = float(fila["Retiro"] or 0)
         record.sueldo_final = float(fila["Sueldo Final"] or 0)
         record.observaciones = fila.get("Observaciones", "")
-        run.records.append(record)
-
-        # Guardar también en la tabla de nómina individual del empleado
-        empleado_nombre = fila["Empleado"]
-        empleado = Employee.query.filter_by(nombre=empleado_nombre).first()
-        if not empleado:
-            empleado = Employee(nombre=empleado_nombre)  # type: ignore[call-arg]
-            db.session.add(empleado)
-            db.session.flush()
+        db.session.add(record)
 
         payroll = EmployeePayroll()
-        payroll.employee_id = empleado.id
+        payroll.employee_id = employee.id
         payroll.fecha = fila["Fecha"]
         payroll.entrada = fila["Entrada"]
         payroll.salida = fila["Salida"]
         payroll.feriado = fila["Feriado"]
         payroll.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
-        payroll.horas_normales = float(fila["Horas Normales"] or 0)
-        payroll.horas_especiales = float(fila["Horas Especiales"] or 0)
+        payroll.horas_normales = _hhmm_to_decimal(fila["Horas Normales"])
+        payroll.horas_especiales = _hhmm_to_decimal(fila["Horas Especiales"])
         payroll.descuento_inventario = float(fila["Descuento Inventario"] or 0)
         payroll.descuento_caja = float(fila["Descuento Caja"] or 0)
         payroll.retiro = float(fila["Retiro"] or 0)
@@ -208,7 +261,14 @@ def _calcular_y_guardar(df, config):
         payroll.run_id = run.id
         db.session.add(payroll)
 
-    db.session.add(run)
+    attendance = EmployeeAttendance()
+    attendance.employee_id = employee.id
+    attendance.run_id = run.id
+    attendance.source_name = run.source_name or "asistencia"
+    attendance.source_type = run.source_type
+    attendance.total_registros = len(resultado["resultados"])
+    db.session.add(attendance)
+
     db.session.commit()
     return run.id, resultado
 
@@ -218,14 +278,27 @@ def _calcular_y_guardar(df, config):
 # --------------------------------------------------------------------------- #
 @app.route("/")
 def index():
-    runs = (
-        CalculationRun.query.order_by(CalculationRun.created_at.desc()).limit(8).all()  # type: ignore[attr-defined]
-    )
+    selected_employee_id = request.args.get("empleado_id", type=int)
     empleados = Employee.query.order_by(Employee.nombre).all()
+    selected_employee = None
+    history_runs = []
+
+    if selected_employee_id:
+        selected_employee = db.session.get(Employee, selected_employee_id)
+        if selected_employee:
+            history_runs = (
+                CalculationRun.query.filter_by(employee_id=selected_employee_id)
+                .order_by(desc(CalculationRun.created_at))
+                .limit(8)
+                .all()
+            )
+
     return render_template(
         "index.html",
-        runs=runs,
         empleados=empleados,
+        selected_employee=selected_employee,
+        selected_employee_id=selected_employee_id,
+        history_runs=history_runs,
         valor_default=VALOR_POR_HORA_DEFAULT,
         hoy=datetime.now().strftime("%Y-%m-%d"),
     )
@@ -272,7 +345,7 @@ def ver_empleado(empleado_id):
     
     registros = (
         EmployeePayroll.query.filter_by(employee_id=empleado_id)
-        .order_by(EmployeePayroll.created_at.desc())  # type: ignore[attr-defined]
+        .order_by(desc(EmployeePayroll.created_at))
         .all()
     )
     
@@ -283,12 +356,35 @@ def ver_empleado(empleado_id):
     )
 
 
+@app.route("/empleado/<int:empleado_id>/eliminar", methods=["POST"])
+def eliminar_empleado(empleado_id):
+    empleado = db.session.get(Employee, empleado_id)
+    if not empleado:
+        flash("El empleado no existe o ya fue eliminado.", "error")
+        return redirect(url_for("index"))
+
+    db.session.delete(empleado)
+    db.session.commit()
+    flash(f"Empleado {empleado.nombre} y sus datos asociados fueron eliminados.", "success")
+    return redirect(url_for("index"))
+
+
 @app.route("/procesar", methods=["POST"])
 def procesar():
     try:
         valor_por_hora = float(request.form.get("valor_por_hora", VALOR_POR_HORA_DEFAULT))
     except (TypeError, ValueError):
         valor_por_hora = VALOR_POR_HORA_DEFAULT
+
+    employee_id = request.form.get("employee_id", type=int)
+    if not employee_id:
+        flash("Selecciona un empleado para asociar la carga de asistencia.", "error")
+        return redirect(url_for("index"))
+
+    empleado = db.session.get(Employee, employee_id)
+    if not empleado:
+        flash("El empleado seleccionado no existe.", "error")
+        return redirect(url_for("index"))
 
     feriados = _parse_feriados(request.form)
     tipo_archivo = request.form.get("file_type", "excel")
@@ -350,6 +446,17 @@ def procesar():
     df_con_asistencia, df_sin_asistencia = filtrar_registros_sin_asistencia(df)
     df = df_con_asistencia.reset_index(drop=True)
 
+    coincidencia = df["Empleado"].astype(str).apply(lambda x: _empleado_coincide(x, empleado))
+    df = df[coincidencia].copy()
+    if df.empty:
+        flash(
+            f"No se encontraron registros de asistencia para {empleado.nombre} en el archivo.",
+            "error",
+        )
+        return redirect(url_for("index", empleado_id=employee_id))
+
+    df.loc[:, "Empleado"] = empleado.nombre
+
     df_incompletos = detectar_registros_incompletos(df)
     df_ambiguos = detectar_horarios_ambiguos(df)
 
@@ -359,6 +466,7 @@ def procesar():
         "source_name": source_name,
         "source_type": tipo_archivo,
         "excluidos": len(df_sin_asistencia),
+        "employee_id": employee_id,
     }
 
     if not df_incompletos.empty or not df_ambiguos.empty:
@@ -371,7 +479,7 @@ def procesar():
             excluidos=len(df_sin_asistencia),
         )
 
-    run_id, _ = _calcular_y_guardar(df, config)
+    run_id, _ = _calcular_y_guardar(df, config, empleado)
     return redirect(url_for("resultado", run_id=run_id))
 
 
@@ -385,6 +493,11 @@ def correcciones():
 
     df = pendiente["df"].copy()
     config = pendiente["config"]
+    employee_id = config.get("employee_id")
+    empleado = db.session.get(Employee, employee_id)
+    if not empleado:
+        flash("El empleado asociado a la corrección ya no existe.", "error")
+        return redirect(url_for("index"))
 
     # Registros incompletos: el admin indica si la marca fue Entrada o Salida
     # y aporta el horario faltante.
@@ -401,7 +514,7 @@ def correcciones():
     _eliminar_pendiente(token)
     session.pop("pending_token", None)
 
-    run_id, _ = _calcular_y_guardar(df, config)
+    run_id, _ = _calcular_y_guardar(df, config, empleado)
     return redirect(url_for("resultado", run_id=run_id))
 
 
@@ -507,11 +620,34 @@ def eliminar(run_id):
     return redirect(url_for("index"))
 
 
+def _ensure_missing_employee_columns():
+    engine = getattr(db, "engine", db.get_engine())
+    inspector = inspect(engine)
+    if "calculation_runs" in inspector.get_table_names():
+        current_columns = [col["name"] for col in inspector.get_columns("calculation_runs")]
+        if "employee_id" not in current_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE calculation_runs ADD COLUMN employee_id INTEGER")
+                )
+            app.logger.info("Added missing employee_id column to calculation_runs table")
+
+    if "employee_records" in inspector.get_table_names():
+        current_columns = [col["name"] for col in inspector.get_columns("employee_records")]
+        if "employee_id" not in current_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE employee_records ADD COLUMN employee_id INTEGER")
+                )
+            app.logger.info("Added missing employee_id column to employee_records table")
+
+
 with app.app_context():
     db.create_all()
+    _ensure_missing_employee_columns()
     
     # Crear empleados iniciales si no existen
-    empleados_iniciales = ["Paz Tatiana", "Yanina Gomez"]
+    empleados_iniciales = ["Paz", "Yanina Gomez"]
     for nombre in empleados_iniciales:
         empleado_existente = Employee.query.filter_by(nombre=nombre).first()
         if not empleado_existente:

@@ -25,26 +25,40 @@
   </div>
   <div class="card-body">
     <div class="field">
-      <label class="field-label" for="empleado_select">Selecciona empleados para ver nómina</label>
-      <select id="empleado_select" multiple size="4">
+      <label class="field-label" for="empleado_search">Buscar empleado</label>
+      <input id="empleado_search" type="search" class="input" placeholder="Escribe para filtrar..." autocomplete="off" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="empleado_select">Empleado seleccionado</label>
+      <select id="empleado_select" size="6">
         {% for empleado in empleados %}
-          <option value="{{ empleado.id }}">{{ empleado.nombre }}</option>
+          <option value="{{ empleado.id }}" {% if empleado.id == selected_employee_id %}selected{% endif %}>{{ empleado.nombre }}</option>
         {% endfor %}
       </select>
-      <p class="hint">Selecciona con Ctrl+Click (Cmd+Click en Mac) para múltiples empleados.</p>
+      <p class="hint">Selecciona un empleado y pulsa el botón para asociar la carga de asistencia.</p>
+      <p class="hint" id="empleado_actual" aria-live="polite">
+        {% if selected_employee %}Empleado seleccionado: {{ selected_employee.nombre }}{% else %}Ningún empleado seleccionado.{% endif %}
+      </p>
     </div>
     <div class="actions-bar">
+      <button type="button" id="btn_seleccionar_empleado" class="btn btn-secondary btn-sm">
+        Seleccionar empleado
+      </button>
       <button type="button" id="btn_ver_empleado" class="btn btn-secondary btn-sm">
         Ver nómina del empleado
       </button>
       <button type="button" id="btn_agregar_empleado" class="btn btn-secondary btn-sm">
         Agregar nuevo empleado
       </button>
+      <button type="button" id="btn_eliminar_empleado" class="btn btn-danger btn-sm">
+        Eliminar empleado
+      </button>
     </div>
   </div>
 </div>
 
 <form method="POST" action="{{ url_for('procesar') }}" enctype="multipart/form-data">
+  <input type="hidden" name="employee_id" id="employee_id" value="{{ selected_employee_id or '' }}" />
   <div class="grid grid-2">
     <!-- Columna principal: archivo -->
     <div class="card">
@@ -142,12 +156,12 @@
 <!-- Historial -->
 <div class="section-title">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
-  Historial de cálculos
+  Historial de cálculos{% if selected_employee %} de {{ selected_employee.nombre }}{% endif %}
 </div>
 <div class="card">
   <div class="card-body">
-    {% if runs %}
-      {% for run in runs %}
+    {% if history_runs %}
+      {% for run in history_runs %}
         <div class="history-item">
           <div>
             <strong>{{ run.source_name or "Cálculo" }}</strong>
@@ -168,7 +182,11 @@
         </div>
       {% endfor %}
     {% else %}
-      <p class="empty">Aún no hay cálculos. Sube un archivo para comenzar.</p>
+      {% if selected_employee %}
+        <p class="empty">Aún no hay cálculos para este empleado.</p>
+      {% else %}
+        <p class="empty">Selecciona un empleado para ver su historial de cálculos.</p>
+      {% endif %}
     {% endif %}
   </div>
 </div>
@@ -192,14 +210,73 @@
   })();
 
   // Manejo de empleados
+  const empleadoSelect = document.getElementById("empleado_select");
+  const hiddenEmpleadoId = document.getElementById("employee_id");
+  const empleadoActual = document.getElementById("empleado_actual");
+
+  function syncEmpleadoSeleccionado() {
+    hiddenEmpleadoId.value = empleadoSelect.value || "";
+    const option = empleadoSelect.selectedOptions[0];
+    if (empleadoActual) {
+      empleadoActual.textContent = option
+        ? `Empleado seleccionado: ${option.textContent}`
+        : "Ningún empleado seleccionado.";
+    }
+  }
+
+  empleadoSelect.addEventListener("change", syncEmpleadoSeleccionado);
+  syncEmpleadoSeleccionado();
+
+  document.getElementById("btn_seleccionar_empleado").addEventListener("click", function() {
+    const option = empleadoSelect.selectedOptions[0];
+    if (!option) {
+      alert("Por favor selecciona un empleado");
+      return;
+    }
+    syncEmpleadoSeleccionado();
+    alert(`Empleado seleccionado: ${option.textContent}`);
+  });
+
   document.getElementById("btn_ver_empleado").addEventListener("click", function() {
-    const select = document.getElementById("empleado_select");
-    const empleado_id = select.value;
+    const empleado_id = empleadoSelect.value;
     if (empleado_id) {
       window.location.href = `/empleado/${empleado_id}`;
     } else {
       alert("Por favor selecciona un empleado");
     }
+  });
+
+  document.getElementById("btn_eliminar_empleado").addEventListener("click", function() {
+    const option = empleadoSelect.selectedOptions[0];
+    if (!option) {
+      alert("Por favor selecciona un empleado");
+      return;
+    }
+    if (!confirm(`¿Eliminar al empleado ${option.textContent}? Esta acción borrará sus cálculos y registros asociados.`)) {
+      return;
+    }
+
+    fetch(`/empleado/${option.value}/eliminar`, { method: "POST" })
+      .then((response) => {
+        if (response.ok) {
+          alert(`Empleado ${option.textContent} eliminado.`);
+          location.reload();
+        } else {
+          alert("No se pudo eliminar el empleado.");
+        }
+      })
+      .catch(() => {
+        alert("Error al eliminar el empleado.");
+      });
+  });
+
+  document.getElementById("empleado_search").addEventListener("input", function(event) {
+    const filter = event.target.value.toLowerCase().trim();
+    const options = document.querySelectorAll('#empleado_select option');
+    options.forEach((option) => {
+      const text = option.textContent.toLowerCase();
+      option.hidden = filter && !text.includes(filter);
+    });
   });
 
   document.getElementById("btn_agregar_empleado").addEventListener("click", function() {

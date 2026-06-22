@@ -19,10 +19,31 @@ class Employee(db.Model):
 
     id: int = db.Column(db.Integer, primary_key=True)
     nombre: str = db.Column(db.String(255), nullable=False, unique=True)
-    created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     payroll_records = db.relationship(
         "EmployeePayroll",
+        backref="employee",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    attendance_uploads = db.relationship(
+        "EmployeeAttendance",
+        backref="employee",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    calculation_runs = db.relationship(
+        "CalculationRun",
+        backref="employee",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    records = db.relationship(
+        "EmployeeRecord",
         backref="employee",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -41,7 +62,7 @@ class EmployeePayroll(db.Model):
     employee_id: int = db.Column(
         db.Integer, db.ForeignKey("employees.id"), nullable=False
     )
-    created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     fecha: str = db.Column(db.String(20), nullable=False)
     entrada: Optional[str] = db.Column(db.String(10), nullable=True)
@@ -58,13 +79,32 @@ class EmployeePayroll(db.Model):
     run_id: Optional[int] = db.Column(db.Integer, nullable=True)  # Referencia al cálculo que generó este registro
 
 
+class EmployeeAttendance(db.Model):
+    """Registros de archivos de asistencia vinculados a un empleado."""
+
+    __tablename__ = "employee_attendances"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    employee_id: int = db.Column(
+        db.Integer, db.ForeignKey("employees.id"), nullable=False
+    )
+    run_id: Optional[int] = db.Column(db.Integer, db.ForeignKey("calculation_runs.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    source_name: Optional[str] = db.Column(db.String(255), nullable=False)
+    source_type: str = db.Column(db.String(20), nullable=False, default="excel")
+    total_registros: int = db.Column(db.Integer, nullable=False, default=0)
+
+
 class CalculationRun(db.Model):
     """Una ejecución de cálculo de sueldos (un lote procesado)."""
 
     __tablename__ = "calculation_runs"
 
     id: int = db.Column(db.Integer, primary_key=True)
-    created_at: datetime = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    employee_id: Optional[int] = db.Column(
+        db.Integer, db.ForeignKey("employees.id"), nullable=True
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     source_name: Optional[str] = db.Column(db.String(255), nullable=True)
     source_type: str = db.Column(db.String(20), nullable=False, default="excel")
     valor_por_hora: float = db.Column(db.Float, nullable=False, default=0.0)
@@ -108,6 +148,9 @@ class EmployeeRecord(db.Model):
     run_id: int = db.Column(
         db.Integer, db.ForeignKey("calculation_runs.id"), nullable=False
     )
+    employee_id: Optional[int] = db.Column(
+        db.Integer, db.ForeignKey("employees.id"), nullable=True
+    )
 
     empleado: str = db.Column(db.String(255), nullable=False)
     fecha: str = db.Column(db.String(20), nullable=False)
@@ -115,8 +158,8 @@ class EmployeeRecord(db.Model):
     salida: Optional[str] = db.Column(db.String(10), nullable=True)
     feriado: Optional[str] = db.Column(db.String(5), nullable=True)
     horas_trabajadas: Optional[str] = db.Column(db.String(10), nullable=True)
-    horas_normales: Optional[str] = db.Column(db.String(10), nullable=True)
-    horas_especiales: Optional[str] = db.Column(db.String(10), nullable=True)
+    horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
+    horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
     descuento_inventario: float = db.Column(db.Float, nullable=False, default=0.0)
     descuento_caja: float = db.Column(db.Float, nullable=False, default=0.0)
     retiro: float = db.Column(db.Float, nullable=False, default=0.0)

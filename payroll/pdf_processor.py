@@ -98,6 +98,19 @@ def extraer_datos_segun_estructura(lineas: List[str], estructura: Dict) -> List[
             if len(linea.strip()) >= 2 and linea.strip().isalpha():
                 empleado_actual = linea.strip()
                 continue
+        elif re.match(r"^[A-ZÁÉÍÓÚÑ ]+$", linea) and len(linea.split()) >= 1:
+            palabras_excluir = {
+                "FECHA", "ENTRADA", "SALIDA", "TOTAL", "REPORTE", "ASISTENCIA", "NOMBRE",
+                "EMPLEADO", "HORA", "DE", "DEL", "PAGOS", "DNI",
+            }
+            if linea not in palabras_excluir and any(v in linea for v in "AEIOUÁÉÍÓÚ"):
+                empleado_actual = linea.strip().title()
+                continue
+
+        if not empleado_actual:
+            empleado_tabular = _extraer_nombre_de_linea_tabular(linea)
+            if empleado_tabular:
+                empleado_actual = empleado_tabular
 
         fechas_horas = parser.extraer_fecha_hora(linea)
         for fh in fechas_horas:
@@ -145,6 +158,15 @@ def _buscar_nombres_en_documento(lineas: List[str]) -> List[str]:
         elif re.match(r"^[A-ZÁÉÍÓÚ][a-záéíóú]+ [A-ZÁÉÍÓÚ][a-záéíóú]+.*$", linea):
             if not any(char.isdigit() for char in linea) and linea not in nombres_encontrados:
                 nombres_encontrados.append(linea)
+        elif re.match(r"^[A-ZÁÉÍÓÚÑ ]+$", linea) and len(linea.split()) >= 1:
+            palabras_excluir = {
+                "FECHA", "ENTRADA", "SALIDA", "TOTAL", "REPORTE", "ASISTENCIA", "NOMBRE",
+                "EMPLEADO", "HORA", "DE", "DEL", "PAGOS", "DNI",
+            }
+            if linea not in palabras_excluir and any(v in linea for v in "AEIOUÁÉÍÓÚ"):
+                nombre = linea.title()
+                if nombre and nombre not in nombres_encontrados:
+                    nombres_encontrados.append(nombre)
 
     return nombres_encontrados
 
@@ -157,6 +179,50 @@ def _calcular_confianza(linea: str, fecha_hora: Dict) -> float:
     if re.match(r"\d{4}-\d{2}-\d{2}", fecha_hora["fecha"]):
         confianza += 0.2
     return min(confianza, 1.0)
+
+
+def _extraer_nombre_de_linea_tabular(linea: str) -> str:
+    """Extrae un nombre de empleado de una línea tabular del PDF."""
+    columnas = re.split(r"\s{2,}|\t|\|", linea)
+    columnas = [col.strip() for col in columnas if col.strip()]
+    if len(columnas) < 2:
+        return ""
+
+    # Buscar la columna de nombre en la segunda posición cuando hay un identificador antes
+    posible_nombre = columnas[1]
+    if _es_nombre_de_empleado(posible_nombre):
+        return posible_nombre.title()
+
+    # Si la primera columna no es ID sino nombre, devolverla
+    posible_nombre = columnas[0]
+    if _es_nombre_de_empleado(posible_nombre):
+        return posible_nombre.title()
+
+    return ""
+
+
+def _es_nombre_de_empleado(texto: str) -> bool:
+    texto = texto.strip()
+    if not texto:
+        return False
+    if re.search(r"\d", texto):
+        return False
+    palabras = texto.upper().split()
+    encabezados_invalidos = {
+        "FECHA", "ENTRADA", "SALIDA", "TOTAL", "REPORTE", "ASISTENCIA",
+        "NOMBRE", "EMPLEADO", "HORA", "ID", "DNI", "DOCUMENTO", "PERSONA",
+        "TIPO", "OTRO", "CODIGO", "CÓDIGO", "LEGAJO",
+    }
+    if any(palabra in encabezados_invalidos for palabra in palabras):
+        return False
+    if len(texto) < 2 or len(texto) > 60:
+        return False
+    palabras = texto.split()
+    if len(palabras) == 1:
+        return bool(re.match(r"^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$", palabras[0]))
+    if len(palabras) == 2:
+        return bool(re.match(r"^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$", texto))
+    return all(re.match(r"^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$", parte) for parte in palabras if parte)
 
 
 def procesar_datos_inteligente(datos_brutos: List[Dict]) -> List[Dict]:
