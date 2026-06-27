@@ -242,7 +242,8 @@ def _agrupar_registros_por_mes(registros):
                 )
                 monto_feriados = float(
                     run.total_monto_feriados
-                    or max(0.0, bruto - monto_normal - monto_especial)
+                    if run.total_monto_feriados is not None
+                    else max(0.0, bruto - monto_normal - monto_especial)
                 )
                 bonificacion = float(run.total_bonificacion or 0)
 
