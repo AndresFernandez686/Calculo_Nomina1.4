@@ -12,7 +12,40 @@
 <p class="page-sub">
   {{ run.source_name or "Cálculo" }} &middot; {{ run.created_at.strftime("%d/%m/%Y %H:%M") }}
   &middot; Valor por hora: ${{ "{:,.0f}".format(run.valor_por_hora) }}
+  &middot; Seguro IPS: {{ run.seguro_ips }}
 </p>
+
+{% set total_general = (run.total_salario_bruto if (run.total_salario_bruto or 0) > 0 else run.total_sueldos) %}
+{% set monto_horas_normales = (run.total_monto_horas_normales or ((run.total_horas_normales or 0) * (run.valor_por_hora or 0))) %}
+{% set monto_horas_especiales = (run.total_monto_horas_especiales or ((run.total_horas_especiales or 0) * (run.valor_por_hora or 0) * 1.3)) %}
+{% set monto_feriados = (run.total_monto_feriados or (total_general - monto_horas_normales - monto_horas_especiales)) %}
+{% if (not run.feriados) and (monto_feriados <= 0.01) %}{% set monto_feriados = 0 %}{% endif %}
+{% if monto_feriados < 0.005 and monto_feriados > -0.005 %}{% set monto_feriados = 0 %}{% endif %}
+{% if monto_feriados < 0.015 and monto_feriados > -0.015 %}{% set monto_feriados = 0 %}{% endif %}
+{% if monto_feriados < 0 %}{% set monto_feriados = 0 %}{% endif %}
+{% set bonificacion = (run.total_bonificacion or 0) %}
+
+<div class="summary-box">
+  <h2>Desglose del salario bruto</h2>
+  <ul>
+    <li>Horas normales: <strong>{{ run.total_horas_normales | hhmm }}</strong> &middot; <strong>Gs {{ "{:,.2f}".format(monto_horas_normales) }}</strong></li>
+    <li>Horas especiales: <strong>{{ run.total_horas_especiales | hhmm }}</strong> &middot; <strong>Gs {{ "{:,.2f}".format(monto_horas_especiales) }}</strong></li>
+    <li>Feriados (extra): <strong>{{ run.feriados or "No" }}</strong> &middot; <strong>Gs {{ "{:,.2f}".format(monto_feriados) }}</strong></li>
+    <li>Bonificación: <strong>Gs {{ "{:,.2f}".format(bonificacion) }}</strong></li>
+    <li><strong>Salario bruto:</strong> <strong>Gs {{ "{:,.2f}".format(total_general) }}</strong></li>
+  </ul>
+</div>
+
+<div class="summary-box">
+  <h2>Resumen IPS</h2>
+  <ul>
+    <li>Salario bruto total: <strong>Gs {{ "{:,.2f}".format(total_general or 0) }}</strong></li>
+    <li>Descuento del empleado (9%): <strong>Gs {{ "{:,.2f}".format(run.total_descuento_ips or 0) }}</strong></li>
+    <li>Aporte empleador (16.5%): <strong>Gs {{ "{:,.2f}".format(run.total_aporte_empleador_ips or 0) }}</strong></li>
+    <li>Total abonar IPS: <strong>Gs {{ "{:,.2f}".format(run.total_ips or 0) }}</strong></li>
+    <li>Salario neto del empleado: <strong>Gs {{ "{:,.2f}".format(run.total_salario_neto_ips or 0) }}</strong></li>
+  </ul>
+</div>
 
 <div class="metrics">
   <div class="metric">
@@ -33,7 +66,7 @@
   </div>
   <div class="metric accent">
     <div class="label">Total sueldos</div>
-    <div class="value">${{ "{:,.0f}".format(run.total_sueldos) }}</div>
+    <div class="value">Gs {{ "{:,.2f}".format(total_general or 0) }}</div>
   </div>
 </div>
 
@@ -60,6 +93,7 @@
         <th>Especiales</th>
         <th>Desc. Inv.</th>
         <th>Desc. Caja</th>
+        <th>Desc. IPS</th>
         <th>Retiro</th>
         <th>Sueldo final</th>
       </tr>
@@ -83,6 +117,7 @@
           <td>{{ r.horas_especiales | hhmm }}</td>
           <td class="muted">${{ "{:,.0f}".format(r.descuento_inventario) }}</td>
           <td class="muted">${{ "{:,.0f}".format(r.descuento_caja) }}</td>
+          <td class="muted">${{ "{:,.0f}".format(r.descuento_ips) }}</td>
           <td class="muted">${{ "{:,.0f}".format(r.retiro) }}</td>
           <td class="money">${{ "{:,.0f}".format(r.sueldo_final) }}</td>
         </tr>

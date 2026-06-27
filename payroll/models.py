@@ -71,9 +71,15 @@ class EmployeePayroll(db.Model):
     horas_trabajadas: Optional[str] = db.Column(db.String(10), nullable=True)
     horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
     horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
+    monto_horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
+    monto_horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
+    monto_feriado: float = db.Column(db.Float, nullable=False, default=0.0)
+    bonificacion: float = db.Column(db.Float, nullable=False, default=0.0)
+    sueldo_bruto: float = db.Column(db.Float, nullable=False, default=0.0)
     descuento_inventario: float = db.Column(db.Float, nullable=False, default=0.0)
     descuento_caja: float = db.Column(db.Float, nullable=False, default=0.0)
     retiro: float = db.Column(db.Float, nullable=False, default=0.0)
+    descuento_ips: float = db.Column(db.Float, nullable=False, default=0.0)
     sueldo_final: float = db.Column(db.Float, nullable=False, default=0.0)
     observaciones: Optional[str] = db.Column(db.String(255), nullable=True)
     run_id: Optional[int] = db.Column(db.Integer, nullable=True)  # Referencia al cálculo que generó este registro
@@ -113,8 +119,18 @@ class CalculationRun(db.Model):
     total_horas: float = db.Column(db.Float, nullable=False, default=0.0)
     total_horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
     total_horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_monto_horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_monto_horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_monto_feriados: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_bonificacion: float = db.Column(db.Float, nullable=False, default=0.0)
     total_sueldos: float = db.Column(db.Float, nullable=False, default=0.0)
     total_registros: int = db.Column(db.Integer, nullable=False, default=0)
+    seguro_ips: str = db.Column(db.String(5), nullable=False, default="No")
+    total_salario_bruto: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_descuento_ips: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_aporte_empleador_ips: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_ips: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_salario_neto_ips: float = db.Column(db.Float, nullable=False, default=0.0)
 
     records = db.relationship(
         "EmployeeRecord",
@@ -134,8 +150,18 @@ class CalculationRun(db.Model):
             "total_horas": self.total_horas,
             "total_horas_normales": self.total_horas_normales,
             "total_horas_especiales": self.total_horas_especiales,
+            "total_monto_horas_normales": self.total_monto_horas_normales,
+            "total_monto_horas_especiales": self.total_monto_horas_especiales,
+            "total_monto_feriados": self.total_monto_feriados,
+            "total_bonificacion": self.total_bonificacion,
             "total_sueldos": self.total_sueldos,
             "total_registros": self.total_registros,
+            "seguro_ips": self.seguro_ips,
+            "total_salario_bruto": self.total_salario_bruto,
+            "total_descuento_ips": self.total_descuento_ips,
+            "total_aporte_empleador_ips": self.total_aporte_empleador_ips,
+            "total_ips": self.total_ips,
+            "total_salario_neto_ips": self.total_salario_neto_ips,
         }
 
 
@@ -160,8 +186,14 @@ class EmployeeRecord(db.Model):
     horas_trabajadas: Optional[str] = db.Column(db.String(10), nullable=True)
     horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
     horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
+    monto_horas_normales: float = db.Column(db.Float, nullable=False, default=0.0)
+    monto_horas_especiales: float = db.Column(db.Float, nullable=False, default=0.0)
+    monto_feriado: float = db.Column(db.Float, nullable=False, default=0.0)
+    bonificacion: float = db.Column(db.Float, nullable=False, default=0.0)
+    sueldo_bruto: float = db.Column(db.Float, nullable=False, default=0.0)
     descuento_inventario: float = db.Column(db.Float, nullable=False, default=0.0)
     descuento_caja: float = db.Column(db.Float, nullable=False, default=0.0)
+    descuento_ips: float = db.Column(db.Float, nullable=False, default=0.0)
     retiro: float = db.Column(db.Float, nullable=False, default=0.0)
     sueldo_final: float = db.Column(db.Float, nullable=False, default=0.0)
     observaciones: Optional[str] = db.Column(db.String(255), nullable=True)

@@ -60,6 +60,28 @@
               </div>
             </div>
 
+            <div class="summary-box" style="margin-top: 1rem;">
+              <h3 style="margin-bottom: .5rem;">Desglose del salario bruto</h3>
+              <ul>
+                <li>Horas normales: <strong>{{ mes.total_horas_normales | hhmm }}</strong> &middot; <strong>Gs {{ "{:,.2f}".format(mes.monto_horas_normales or 0) }}</strong></li>
+                <li>Horas especiales: <strong>{{ mes.total_horas_especiales | hhmm }}</strong> &middot; <strong>Gs {{ "{:,.2f}".format(mes.monto_horas_especiales or 0) }}</strong></li>
+                <li>Feriados (extra): <strong>Gs {{ "{:,.2f}".format(mes.monto_feriados or 0) }}</strong></li>
+                <li>Bonificación: <strong>Gs {{ "{:,.2f}".format(mes.bonificacion or 0) }}</strong></li>
+                <li><strong>Salario bruto:</strong> <strong>Gs {{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</strong></li>
+              </ul>
+            </div>
+
+            <div class="summary-box" style="margin-top: 1rem;">
+              <h3 style="margin-bottom: .5rem;">Resumen IPS</h3>
+              <ul>
+                <li>Salario bruto total: <strong>Gs {{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</strong></li>
+                <li>Descuento del empleado (9%): <strong>Gs {{ "{:,.2f}".format(mes.total_descuento_ips or 0) }}</strong></li>
+                <li>Aporte empleador (16.5%): <strong>Gs {{ "{:,.2f}".format(mes.total_aporte_empleador_ips or 0) }}</strong></li>
+                <li>Total abonar IPS: <strong>Gs {{ "{:,.2f}".format(mes.total_ips or 0) }}</strong></li>
+                <li>Salario neto del empleado: <strong>Gs {{ "{:,.2f}".format(mes.total_salario_neto_ips or 0) }}</strong></li>
+              </ul>
+            </div>
+
             <div class="table-wrap">
               <table>
                 <thead>

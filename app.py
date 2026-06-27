@@ -171,6 +171,13 @@ MESES_ES = [
 
 
 def _agrupar_registros_por_mes(registros):
+    run_ids = {int(r.run_id) for r in registros if getattr(r, "run_id", None)}
+    runs_by_id = {}
+    if run_ids:
+        runs = [db.session.get(CalculationRun, run_id) for run_id in run_ids]
+        runs = [run for run in runs if run is not None]
+        runs_by_id = {run.id: run for run in runs}
+
     meses = {}
     for registro in registros:
         fecha_str = getattr(registro, "fecha", "")
@@ -190,6 +197,16 @@ def _agrupar_registros_por_mes(registros):
                 "total_horas_normales": 0.0,
                 "total_horas_especiales": 0.0,
                 "total_sueldos": 0.0,
+                "total_salario_bruto": 0.0,
+                "monto_horas_normales": 0.0,
+                "monto_horas_especiales": 0.0,
+                "monto_feriados": 0.0,
+                "bonificacion": 0.0,
+                "total_descuento_ips": 0.0,
+                "total_aporte_empleador_ips": 0.0,
+                "total_ips": 0.0,
+                "total_salario_neto_ips": 0.0,
+                "_run_ids_contados": set(),
             }
 
         meses[clave]["registros"].append(registro)
@@ -203,7 +220,65 @@ def _agrupar_registros_por_mes(registros):
         meses[clave]["total_horas_especiales"] += horas_especiales
         meses[clave]["total_sueldos"] += float(registro.sueldo_final or 0)
 
-    return [meses[clave] for clave in sorted(meses.keys(), reverse=True)]
+        run_id = getattr(registro, "run_id", None)
+        if run_id and run_id not in meses[clave]["_run_ids_contados"]:
+            run = runs_by_id.get(int(run_id))
+            if run:
+                bruto = float(run.total_salario_bruto or 0)
+                if bruto <= 0:
+                    bruto = float(run.total_sueldos or 0)
+
+                monto_normal = float(
+                    run.total_monto_horas_normales
+                    or (float(run.total_horas_normales or 0) * float(run.valor_por_hora or 0))
+                )
+                monto_especial = float(
+                    run.total_monto_horas_especiales
+                    or (
+                        float(run.total_horas_especiales or 0)
+                        * float(run.valor_por_hora or 0)
+                        * 1.3
+                    )
+                )
+                monto_feriados = float(
+                    run.total_monto_feriados
+                    or max(0.0, bruto - monto_normal - monto_especial)
+                )
+                bonificacion = float(run.total_bonificacion or 0)
+
+                if (not run.feriados and monto_feriados <= 0.01) or abs(monto_feriados) < 0.015:
+                    monto_feriados = 0.0
+
+                descuento_ips = float(run.total_descuento_ips or 0)
+                aporte_empleador = float(run.total_aporte_empleador_ips or 0)
+                total_ips = float(run.total_ips or (descuento_ips + aporte_empleador))
+                neto = float(run.total_salario_neto_ips or (bruto - descuento_ips))
+
+                meses[clave]["total_salario_bruto"] += bruto
+                meses[clave]["monto_horas_normales"] += monto_normal
+                meses[clave]["monto_horas_especiales"] += monto_especial
+                meses[clave]["monto_feriados"] += monto_feriados
+                meses[clave]["bonificacion"] += bonificacion
+                meses[clave]["total_descuento_ips"] += descuento_ips
+                meses[clave]["total_aporte_empleador_ips"] += aporte_empleador
+                meses[clave]["total_ips"] += total_ips
+                meses[clave]["total_salario_neto_ips"] += neto
+
+            meses[clave]["_run_ids_contados"].add(run_id)
+
+    salida = []
+    for clave in sorted(meses.keys(), reverse=True):
+        mes = meses[clave]
+        if abs(mes["monto_feriados"]) < 0.015:
+            mes["monto_feriados"] = 0.0
+        if mes["total_salario_bruto"] <= 0:
+            mes["total_salario_bruto"] = mes["total_sueldos"]
+        if mes["total_salario_neto_ips"] <= 0:
+            mes["total_salario_neto_ips"] = mes["total_salario_bruto"]
+        mes.pop("_run_ids_contados", None)
+        salida.append(mes)
+
+    return salida
 
 
 def _filtrar_registros_por_mes(registros, year, month):
@@ -224,6 +299,148 @@ def _fecha_str(valor):
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except Exception:  # noqa: BLE001
         return str(valor)
+
+
+def _month_key_from_value(valor: object) -> Optional[str]:
+    if valor is None:
+        return None
+
+    if isinstance(valor, datetime):
+        return f"{valor.year:04d}-{valor.month:02d}"
+
+    texto = str(valor).strip()
+    if not texto:
+        return None
+
+    # Soporta fechas normalizadas del sistema (YYYY-MM-DD) sin ambiguedad.
+    try:
+        fecha_iso = datetime.strptime(texto[:10], "%Y-%m-%d")
+        return f"{fecha_iso.year:04d}-{fecha_iso.month:02d}"
+    except ValueError:
+        pass
+
+    # Soporta fechas de formularios/reportes en formato DD/MM/YYYY.
+    try:
+        fecha_latam = datetime.strptime(texto[:10], "%d/%m/%Y")
+        return f"{fecha_latam.year:04d}-{fecha_latam.month:02d}"
+    except ValueError:
+        pass
+
+    try:
+        fecha = pd.to_datetime(texto, errors="coerce")
+    except Exception:  # noqa: BLE001
+        return None
+    if pd.isna(fecha):
+        return None
+    return f"{fecha.year:04d}-{fecha.month:02d}"
+
+
+def _month_label_from_key(month_key: str) -> str:
+    try:
+        year_str, month_str = month_key.split("-", 1)
+        year = int(year_str)
+        month = int(month_str)
+        return f"{MESES_ES[month - 1]} {year}"
+    except (ValueError, IndexError):
+        return month_key
+
+
+def _obtener_meses_df(df) -> set[str]:
+    if "Fecha" not in df.columns:
+        return set()
+    meses: set[str] = set()
+    for valor in df["Fecha"].tolist():
+        month_key = _month_key_from_value(valor)
+        if month_key:
+            meses.add(month_key)
+    return meses
+
+
+def _agrupar_registros_por_mes_key(registros):
+    meses = {}
+    for registro in registros:
+        month_key = _month_key_from_value(getattr(registro, "fecha", ""))
+        if not month_key:
+            continue
+
+        if month_key not in meses:
+            meses[month_key] = {
+                "month_key": month_key,
+                "mes_nombre": _month_label_from_key(month_key),
+                "registros": [],
+                "dias_trabajados": 0,
+                "total_horas_normales": 0.0,
+                "total_horas_especiales": 0.0,
+                "total_sueldos": 0.0,
+            }
+
+        meses[month_key]["registros"].append(registro)
+        horas_normales = float(getattr(registro, "horas_normales", 0) or 0)
+        horas_especiales = float(getattr(registro, "horas_especiales", 0) or 0)
+        if (horas_normales + horas_especiales) > 0:
+            meses[month_key]["dias_trabajados"] += 1
+        meses[month_key]["total_horas_normales"] += horas_normales
+        meses[month_key]["total_horas_especiales"] += horas_especiales
+        meses[month_key]["total_sueldos"] += float(getattr(registro, "sueldo_final", 0) or 0)
+
+    return [meses[key] for key in sorted(meses.keys(), reverse=True)]
+
+
+def _obtener_conflictos_mes_empleado(employee_id: int, meses_objetivo: set[str]):
+    if not meses_objetivo:
+        return [], []
+
+    registros = (
+        EmployeePayroll.query.filter_by(employee_id=employee_id)
+        .order_by(desc(EmployeePayroll.created_at))
+        .all()
+    )
+    registros_conflictivos = []
+    for registro in registros:
+        month_key = _month_key_from_value(getattr(registro, "fecha", ""))
+        if month_key in meses_objetivo:
+            registros_conflictivos.append(registro)
+
+    meses_conflictivos_set: set[str] = set()
+    for registro in registros_conflictivos:
+        month_key = _month_key_from_value(getattr(registro, "fecha", ""))
+        if month_key:
+            meses_conflictivos_set.add(month_key)
+
+    meses_conflictivos = sorted(meses_conflictivos_set, reverse=True)
+    return meses_conflictivos, registros_conflictivos
+
+
+def _reemplazar_meses_existentes(employee_id: int, meses_objetivo: set[str]) -> None:
+    if not meses_objetivo:
+        return
+
+    registros = EmployeePayroll.query.filter_by(employee_id=employee_id).all()
+    registros_a_borrar = []
+    run_ids: set[int] = set()
+    for registro in registros:
+        month_key = _month_key_from_value(getattr(registro, "fecha", ""))
+        if month_key in meses_objetivo:
+            registros_a_borrar.append(registro)
+            if getattr(registro, "run_id", None):
+                run_ids.add(int(registro.run_id))
+
+    for registro in registros_a_borrar:
+        db.session.delete(registro)
+
+    if run_ids:
+        for run_id in run_ids:
+            EmployeeAttendance.query.filter_by(run_id=run_id).delete(
+                synchronize_session=False
+            )
+            EmployeeRecord.query.filter_by(run_id=run_id).delete(
+                synchronize_session=False
+            )
+            CalculationRun.query.filter_by(id=run_id).delete(
+                synchronize_session=False
+            )
+
+    db.session.commit()
 
 
 def _sanear_nombre_para_archivo(nombre: str) -> str:
@@ -475,6 +692,12 @@ def _recalcular_run_legado(run: CalculationRun) -> None:
         record.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
         record.horas_normales = _hhmm_to_decimal(fila["Horas Normales"])
         record.horas_especiales = _hhmm_to_decimal(fila["Horas Especiales"])
+        record.monto_horas_normales = float(fila.get("Monto Horas Normales") or 0)
+        record.monto_horas_especiales = float(fila.get("Monto Horas Especiales") or 0)
+        record.monto_feriado = float(fila.get("Monto Feriado") or 0)
+        record.bonificacion = float(fila.get("Bonificacion") or 0)
+        record.sueldo_bruto = float(fila.get("Sueldo Bruto") or 0)
+        record.descuento_ips = float(fila.get("Descuento IPS") or 0)
         record.sueldo_final = float(fila["Sueldo Final"] or 0)
         record.observaciones = fila.get("Observaciones", "")
 
@@ -483,13 +706,28 @@ def _recalcular_run_legado(run: CalculationRun) -> None:
         payroll.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
         payroll.horas_normales = _hhmm_to_decimal(fila["Horas Normales"])
         payroll.horas_especiales = _hhmm_to_decimal(fila["Horas Especiales"])
+        payroll.monto_horas_normales = float(fila.get("Monto Horas Normales") or 0)
+        payroll.monto_horas_especiales = float(fila.get("Monto Horas Especiales") or 0)
+        payroll.monto_feriado = float(fila.get("Monto Feriado") or 0)
+        payroll.bonificacion = float(fila.get("Bonificacion") or 0)
+        payroll.sueldo_bruto = float(fila.get("Sueldo Bruto") or 0)
+        payroll.descuento_ips = float(fila.get("Descuento IPS") or 0)
         payroll.sueldo_final = float(fila["Sueldo Final"] or 0)
         payroll.observaciones = fila.get("Observaciones", "")
 
     run.total_horas = resultado["total_horas"]
     run.total_horas_normales = resultado["total_horas_normales"]
     run.total_horas_especiales = resultado["total_horas_especiales"]
+    run.total_monto_horas_normales = resultado["total_monto_horas_normales"]
+    run.total_monto_horas_especiales = resultado["total_monto_horas_especiales"]
+    run.total_monto_feriados = resultado["total_monto_feriados"]
+    run.total_bonificacion = resultado["total_bonificacion"]
     run.total_sueldos = resultado["total_sueldos"]
+    run.total_salario_bruto = resultado["total_salario_bruto"]
+    run.total_descuento_ips = resultado["total_descuento_ips"]
+    run.total_aporte_empleador_ips = resultado["total_aporte_empleador_ips"]
+    run.total_ips = resultado["total_ips"]
+    run.total_salario_neto_ips = resultado["total_salario_neto_ips"]
     run.total_registros = len(resultado["resultados"])
     db.session.commit()
 
@@ -555,7 +793,12 @@ def _desglose_horas(entrada_texto: str, salida_texto: str) -> dict:
 
 def _calcular_y_guardar(df, config, employee: Employee):
     """Ejecuta el cálculo y guarda el resultado en la base de datos."""
-    resultado = procesar_datos_excel(df, config["valor_por_hora"], set(config["feriados"]))
+    resultado = procesar_datos_excel(
+        df,
+        config["valor_por_hora"],
+        set(config["feriados"]),
+        ips_enabled=config.get("ips_enabled", False),
+    )
 
     run = CalculationRun()
     run.employee_id = employee.id
@@ -567,10 +810,20 @@ def _calcular_y_guardar(df, config, employee: Employee):
         if config["feriados"]
         else None
     )
+    run.seguro_ips = "Sí" if config.get("ips_enabled", False) else "No"
     run.total_horas = resultado["total_horas"]
     run.total_horas_normales = resultado["total_horas_normales"]
     run.total_horas_especiales = resultado["total_horas_especiales"]
+    run.total_monto_horas_normales = resultado["total_monto_horas_normales"]
+    run.total_monto_horas_especiales = resultado["total_monto_horas_especiales"]
+    run.total_monto_feriados = resultado["total_monto_feriados"]
+    run.total_bonificacion = resultado["total_bonificacion"]
     run.total_sueldos = resultado["total_sueldos"]
+    run.total_salario_bruto = resultado["total_salario_bruto"]
+    run.total_descuento_ips = resultado["total_descuento_ips"]
+    run.total_aporte_empleador_ips = resultado["total_aporte_empleador_ips"]
+    run.total_ips = resultado["total_ips"]
+    run.total_salario_neto_ips = resultado["total_salario_neto_ips"]
     run.total_registros = len(resultado["resultados"])
 
     db.session.add(run)
@@ -588,9 +841,15 @@ def _calcular_y_guardar(df, config, employee: Employee):
         record.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
         record.horas_normales = _hhmm_to_decimal(fila["Horas Normales"])
         record.horas_especiales = _hhmm_to_decimal(fila["Horas Especiales"])
+        record.monto_horas_normales = float(fila.get("Monto Horas Normales") or 0)
+        record.monto_horas_especiales = float(fila.get("Monto Horas Especiales") or 0)
+        record.monto_feriado = float(fila.get("Monto Feriado") or 0)
+        record.bonificacion = float(fila.get("Bonificacion") or 0)
+        record.sueldo_bruto = float(fila.get("Sueldo Bruto") or 0)
         record.descuento_inventario = float(fila["Descuento Inventario"] or 0)
         record.descuento_caja = float(fila["Descuento Caja"] or 0)
         record.retiro = float(fila["Retiro"] or 0)
+        record.descuento_ips = float(fila["Descuento IPS"] or 0)
         record.sueldo_final = float(fila["Sueldo Final"] or 0)
         record.observaciones = fila.get("Observaciones", "")
         db.session.add(record)
@@ -604,8 +863,14 @@ def _calcular_y_guardar(df, config, employee: Employee):
         payroll.horas_trabajadas = fila["Horas Trabajadas (h:mm)"]
         payroll.horas_normales = _hhmm_to_decimal(fila["Horas Normales"])
         payroll.horas_especiales = _hhmm_to_decimal(fila["Horas Especiales"])
+        payroll.monto_horas_normales = float(fila.get("Monto Horas Normales") or 0)
+        payroll.monto_horas_especiales = float(fila.get("Monto Horas Especiales") or 0)
+        payroll.monto_feriado = float(fila.get("Monto Feriado") or 0)
+        payroll.bonificacion = float(fila.get("Bonificacion") or 0)
+        payroll.sueldo_bruto = float(fila.get("Sueldo Bruto") or 0)
         payroll.descuento_inventario = float(fila["Descuento Inventario"] or 0)
         payroll.descuento_caja = float(fila["Descuento Caja"] or 0)
+        payroll.descuento_ips = float(fila["Descuento IPS"] or 0)
         payroll.retiro = float(fila["Retiro"] or 0)
         payroll.sueldo_final = float(fila["Sueldo Final"] or 0)
         payroll.observaciones = fila.get("Observaciones", "")
@@ -622,6 +887,17 @@ def _calcular_y_guardar(df, config, employee: Employee):
 
     db.session.commit()
     return run.id, resultado
+
+
+def _render_confirmacion_reemplazo(empleado: Employee, pendiente_token: str, meses_conflictivos: list[str], registros_conflictivos):
+    return render_template(
+        "confirm_replace_month.html",
+        empleado=empleado,
+        pending_token=pendiente_token,
+        meses_conflictivos=meses_conflictivos,
+        meses_conflictivos_label=[_month_label_from_key(m) for m in meses_conflictivos],
+        registros_conflictivos_por_mes=_agrupar_registros_por_mes_key(registros_conflictivos),
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -882,6 +1158,9 @@ def procesar():
     df_incompletos = detectar_registros_incompletos(df)
     df_ambiguos = detectar_horarios_ambiguos(df)
 
+    ips_value = (request.form.get("seguro_ips", "No") or "No").strip().lower()
+    ips_enabled = ips_value in ("sí", "si", "s", "yes", "true")
+
     config = {
         "valor_por_hora": valor_por_hora,
         "feriados": list(feriados),
@@ -889,7 +1168,24 @@ def procesar():
         "source_type": tipo_archivo,
         "excluidos": len(df_sin_asistencia),
         "employee_id": employee_id,
+        "ips_enabled": ips_enabled,
     }
+
+    meses_df = _obtener_meses_df(df)
+    meses_conflictivos, registros_conflictivos = _obtener_conflictos_mes_empleado(
+        employee_id,
+        meses_df,
+    )
+    if meses_conflictivos:
+        config["meses_conflictivos"] = meses_conflictivos
+        token_reemplazo = _guardar_pendiente(df, config)
+        session["replace_pending_token"] = token_reemplazo
+        return _render_confirmacion_reemplazo(
+            empleado,
+            token_reemplazo,
+            meses_conflictivos,
+            registros_conflictivos,
+        )
 
     if not df_incompletos.empty or not df_ambiguos.empty:
         token = _guardar_pendiente(df, config)
@@ -936,7 +1232,50 @@ def correcciones():
     _eliminar_pendiente(token)
     session.pop("pending_token", None)
 
+    meses_df = _obtener_meses_df(df)
+    meses_conflictivos, registros_conflictivos = _obtener_conflictos_mes_empleado(
+        employee_id,
+        meses_df,
+    )
+    if meses_conflictivos:
+        config["meses_conflictivos"] = meses_conflictivos
+        token_reemplazo = _guardar_pendiente(df, config)
+        session["replace_pending_token"] = token_reemplazo
+        return _render_confirmacion_reemplazo(
+            empleado,
+            token_reemplazo,
+            meses_conflictivos,
+            registros_conflictivos,
+        )
+
     run_id, _ = _calcular_y_guardar(df, config, empleado)
+    return redirect(url_for("resultado", run_id=run_id))
+
+
+@app.route("/actualizar-mes", methods=["POST"])
+def actualizar_mes():
+    token = request.form.get("pending_token") or session.get("replace_pending_token")
+    pendiente = _cargar_pendiente(token)
+    if not pendiente:
+        flash("La solicitud de actualización expiró. Vuelve a cargar el archivo.", "error")
+        return redirect(url_for("index"))
+
+    df = pendiente["df"].copy()
+    config = pendiente["config"]
+    employee_id = config.get("employee_id")
+    empleado = db.session.get(Employee, employee_id)
+    if not empleado:
+        flash("El empleado asociado a la actualización ya no existe.", "error")
+        return redirect(url_for("index"))
+
+    meses_df = _obtener_meses_df(df)
+    _reemplazar_meses_existentes(employee_id, meses_df)
+
+    _eliminar_pendiente(token)
+    session.pop("replace_pending_token", None)
+
+    run_id, _ = _calcular_y_guardar(df, config, empleado)
+    flash("Se actualizó el mes y se reemplazaron los registros anteriores.", "success")
     return redirect(url_for("resultado", run_id=run_id))
 
 
@@ -1045,25 +1384,141 @@ def eliminar(run_id):
 
 
 def _ensure_missing_employee_columns():
-    engine = getattr(db, "engine", db.get_engine())
+    engine = db.engine
     inspector = inspect(engine)
-    if "calculation_runs" in inspector.get_table_names():
-        current_columns = [col["name"] for col in inspector.get_columns("calculation_runs")]
-        if "employee_id" not in current_columns:
-            with engine.begin() as connection:
-                connection.execute(
-                    text("ALTER TABLE calculation_runs ADD COLUMN employee_id INTEGER")
-                )
-            app.logger.info("Added missing employee_id column to calculation_runs table")
+    table_names = set(inspector.get_table_names())
 
-    if "employee_records" in inspector.get_table_names():
-        current_columns = [col["name"] for col in inspector.get_columns("employee_records")]
-        if "employee_id" not in current_columns:
-            with engine.begin() as connection:
-                connection.execute(
-                    text("ALTER TABLE employee_records ADD COLUMN employee_id INTEGER")
-                )
-            app.logger.info("Added missing employee_id column to employee_records table")
+    def ensure_column(table_name: str, column_name: str, ddl: str) -> None:
+        if table_name not in table_names:
+            return
+        current_columns = {col["name"] for col in inspector.get_columns(table_name)}
+        if column_name in current_columns:
+            return
+        with engine.begin() as connection:
+            connection.execute(text(ddl))
+        app.logger.info("Added missing %s column to %s table", column_name, table_name)
+
+    ensure_column(
+        "calculation_runs",
+        "employee_id",
+        "ALTER TABLE calculation_runs ADD COLUMN employee_id INTEGER",
+    )
+    ensure_column(
+        "calculation_runs",
+        "seguro_ips",
+        "ALTER TABLE calculation_runs ADD COLUMN seguro_ips VARCHAR(5) NOT NULL DEFAULT 'No'",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_salario_bruto",
+        "ALTER TABLE calculation_runs ADD COLUMN total_salario_bruto FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_descuento_ips",
+        "ALTER TABLE calculation_runs ADD COLUMN total_descuento_ips FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_aporte_empleador_ips",
+        "ALTER TABLE calculation_runs ADD COLUMN total_aporte_empleador_ips FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_ips",
+        "ALTER TABLE calculation_runs ADD COLUMN total_ips FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_salario_neto_ips",
+        "ALTER TABLE calculation_runs ADD COLUMN total_salario_neto_ips FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_monto_horas_normales",
+        "ALTER TABLE calculation_runs ADD COLUMN total_monto_horas_normales FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_monto_horas_especiales",
+        "ALTER TABLE calculation_runs ADD COLUMN total_monto_horas_especiales FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_monto_feriados",
+        "ALTER TABLE calculation_runs ADD COLUMN total_monto_feriados FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "calculation_runs",
+        "total_bonificacion",
+        "ALTER TABLE calculation_runs ADD COLUMN total_bonificacion FLOAT NOT NULL DEFAULT 0",
+    )
+
+    ensure_column(
+        "employee_records",
+        "employee_id",
+        "ALTER TABLE employee_records ADD COLUMN employee_id INTEGER",
+    )
+    ensure_column(
+        "employee_records",
+        "descuento_ips",
+        "ALTER TABLE employee_records ADD COLUMN descuento_ips FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_records",
+        "monto_horas_normales",
+        "ALTER TABLE employee_records ADD COLUMN monto_horas_normales FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_records",
+        "monto_horas_especiales",
+        "ALTER TABLE employee_records ADD COLUMN monto_horas_especiales FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_records",
+        "monto_feriado",
+        "ALTER TABLE employee_records ADD COLUMN monto_feriado FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_records",
+        "bonificacion",
+        "ALTER TABLE employee_records ADD COLUMN bonificacion FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_records",
+        "sueldo_bruto",
+        "ALTER TABLE employee_records ADD COLUMN sueldo_bruto FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_payroll",
+        "descuento_ips",
+        "ALTER TABLE employee_payroll ADD COLUMN descuento_ips FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_payroll",
+        "monto_horas_normales",
+        "ALTER TABLE employee_payroll ADD COLUMN monto_horas_normales FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_payroll",
+        "monto_horas_especiales",
+        "ALTER TABLE employee_payroll ADD COLUMN monto_horas_especiales FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_payroll",
+        "monto_feriado",
+        "ALTER TABLE employee_payroll ADD COLUMN monto_feriado FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_payroll",
+        "bonificacion",
+        "ALTER TABLE employee_payroll ADD COLUMN bonificacion FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_payroll",
+        "sueldo_bruto",
+        "ALTER TABLE employee_payroll ADD COLUMN sueldo_bruto FLOAT NOT NULL DEFAULT 0",
+    )
 
 
 with app.app_context():

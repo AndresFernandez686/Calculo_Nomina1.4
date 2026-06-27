@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1>Mes ya cargado para {{ empleado.nombre }}</h1>
+  <p>Se detectaron registros existentes para el mismo mes. Puedes revisar el detalle y decidir si deseas actualizarlo.</p>
+  <div class="hero-badges">
+    {% for label in meses_conflictivos_label %}
+      <span class="badge">{{ label }}</span>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="actions-bar">
+  <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancelar</a>
+  <form method="POST" action="{{ url_for('actualizar_mes') }}">
+    <input type="hidden" name="pending_token" value="{{ pending_token }}" />
+    <button type="submit" class="btn btn-primary">Actualizar mes y reemplazar datos anteriores</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Detalle existente del mes</h2>
+  </div>
+  <div class="card-body">
+    {% for mes in registros_conflictivos_por_mes %}
+      <div class="card month-card" style="margin-bottom: 1rem;">
+        <div class="card-head">
+          <h3>{{ mes.mes_nombre }}</h3>
+        </div>
+        <div class="card-body">
+          <div class="month-summary">
+            <div>
+              <p>Dias Trabajados</p>
+              <strong>{{ mes.dias_trabajados }}</strong>
+            </div>
+            <div>
+              <p>Total Horas Normales</p>
+              <strong>{{ "%.2f"|format(mes.total_horas_normales) }}</strong>
+            </div>
+            <div>
+              <p>Total Horas Especiales</p>
+              <strong>{{ "%.2f"|format(mes.total_horas_especiales) }}</strong>
+            </div>
+            <div>
+              <p>Sueldo Total</p>
+              <strong>${{ "{:,.0f}".format(mes.total_sueldos) }}</strong>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Entrada</th>
+                  <th>Salida</th>
+                  <th style="text-align: center;">Feriado</th>
+                  <th style="text-align: right;">Horas Normales</th>
+                  <th style="text-align: right;">Horas Especiales</th>
+                  <th style="text-align: right;">Desc. Inv.</th>
+                  <th style="text-align: right;">Desc. Caja</th>
+                  <th style="text-align: right;">Retiro</th>
+                  <th style="text-align: right;">Sueldo Final</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for registro in mes.registros %}
+                  <tr>
+                    <td>{{ registro.fecha }}</td>
+                    <td>{{ registro.entrada or "-" }}</td>
+                    <td>{{ registro.salida or "-" }}</td>
+                    <td style="text-align: center;">{{ registro.feriado or "N" }}</td>
+                    <td style="text-align: right;">{{ "%.2f"|format(registro.horas_normales) }}</td>
+                    <td style="text-align: right;">{{ "%.2f"|format(registro.horas_especiales) }}</td>
+                    <td style="text-align: right;">{% if registro.descuento_inventario %}${{ "{:,.0f}".format(registro.descuento_inventario) }}{% else %}-{% endif %}</td>
+                    <td style="text-align: right;">{% if registro.descuento_caja %}${{ "{:,.0f}".format(registro.descuento_caja) }}{% else %}-{% endif %}</td>
+                    <td style="text-align: right;">{% if registro.retiro %}${{ "{:,.0f}".format(registro.retiro) }}{% else %}-{% endif %}</td>
+                    <td style="text-align: right;">${{ "{:,.0f}".format(registro.sueldo_final) }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <p class="empty">No se encontraron registros previos para mostrar.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
