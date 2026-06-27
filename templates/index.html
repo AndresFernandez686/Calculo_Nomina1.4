@@ -1,19 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="hero">
-  <h1>Calcula los sueldos de tu equipo en segundos</h1>
-  <p>
-    Sube un archivo Excel o hasta dos PDF de asistencia. El sistema detecta
-    marcaciones duplicadas, completa registros incompletos y aplica feriados,
-    horas especiales y descuentos automáticamente.
-  </p>
-  <div class="hero-badges">
-    <span class="badge">Procesamiento inteligente</span>
-    <span class="badge">Feriados con doble pago</span>
-    <span class="badge">Exportación a Excel</span>
-  </div>
-</section>
+
 
 <!-- Selección de empleados -->
 <div class="card">
@@ -146,51 +134,13 @@
             <input type="date" name="feriado_2" />
             <input type="date" name="feriado_3" />
           </div>
-          <p class="hint">Opcional. Hasta 3 fechas; reciben pago x2.</p>
+          <p class="hint">Opcional. Hasta 3 fechas.</p>
         </div>
       </div>
     </div>
   </div>
 
 </form>
-
-<!-- Historial -->
-<div class="section-title">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
-  Historial de cálculos{% if selected_employee %} de {{ selected_employee.nombre }}{% endif %}
-</div>
-<div class="card">
-  <div class="card-body">
-    {% if history_runs %}
-      {% for run in history_runs %}
-        <div class="history-item">
-          <div>
-            <strong>{{ run.source_name or "Cálculo" }}</strong>
-            <span class="badge">{{ run.source_type | upper }}</span>
-            <div class="history-meta">
-              {{ run.created_at.strftime("%d/%m/%Y %H:%M") }} &middot;
-              {{ run.total_registros }} registros &middot;
-              Total: <strong class="money">${{ "{:,.0f}".format(run.total_sueldos) }}</strong>
-            </div>
-          </div>
-          <div class="history-actions">
-            <a class="btn btn-ghost btn-sm" href="{{ url_for('resultado', run_id=run.id) }}">Ver</a>
-            <a class="btn btn-ghost btn-sm" href="{{ url_for('descargar', run_id=run.id) }}">Excel</a>
-            <form method="POST" action="{{ url_for('eliminar', run_id=run.id) }}" onsubmit="return confirm('¿Eliminar este cálculo del historial?');">
-              <button type="submit" class="btn btn-danger-soft btn-sm">Eliminar</button>
-            </form>
-          </div>
-        </div>
-      {% endfor %}
-    {% else %}
-      {% if selected_employee %}
-        <p class="empty">Aún no hay cálculos para este empleado.</p>
-      {% else %}
-        <p class="empty">Selecciona un empleado para ver su historial de cálculos.</p>
-      {% endif %}
-    {% endif %}
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
