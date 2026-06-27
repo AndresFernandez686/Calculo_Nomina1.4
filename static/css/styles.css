@@ -775,6 +775,10 @@ tbody tr:hover {
   margin-top: 1.5rem;
 }
 
+.actions-bar + .card {
+  margin-top: 1.5rem;
+}
+
 .footer {
   text-align: center;
   color: var(--text-muted);

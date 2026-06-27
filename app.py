@@ -44,6 +44,7 @@ from payroll.models import (
     EmployeeRecord,
     db,
 )
+from payroll.models_liquidacion import obtener_mensaje_liquidacion
 from payroll.pdf_processor import (
     convertir_a_dataframe_estandar,  # noqa: F401  (import keeps API discoverable)
     detectar_horarios_ambiguos,
@@ -1016,6 +1017,21 @@ def ver_empleado(empleado_id):
         empleado=empleado,
         registros=registros,
         registros_por_mes=registros_por_mes,
+    )
+
+
+@app.route("/empleado/<int:empleado_id>/liquidaciones")
+def liquidaciones(empleado_id):
+    """Muestra la vista de liquidaciones para un empleado."""
+    empleado = db.session.get(Employee, empleado_id)
+    if not empleado:
+        abort(404)
+
+    mensaje = obtener_mensaje_liquidacion()
+    return render_template(
+        "liquidaciones.html",
+        empleado=empleado,
+        mensaje=mensaje,
     )
 
 
