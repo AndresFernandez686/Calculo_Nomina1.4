@@ -186,14 +186,21 @@ def _agrupar_registros_por_mes(registros):
                 "month": fecha_dt.month,
                 "mes_nombre": f"{MESES_ES[fecha_dt.month - 1]} {fecha_dt.year}",
                 "registros": [],
+                "dias_trabajados": 0,
                 "total_horas_normales": 0.0,
                 "total_horas_especiales": 0.0,
                 "total_sueldos": 0.0,
             }
 
         meses[clave]["registros"].append(registro)
-        meses[clave]["total_horas_normales"] += float(registro.horas_normales or 0)
-        meses[clave]["total_horas_especiales"] += float(registro.horas_especiales or 0)
+        horas_normales = float(registro.horas_normales or 0)
+        horas_especiales = float(registro.horas_especiales or 0)
+
+        if (horas_normales + horas_especiales) > 0:
+            meses[clave]["dias_trabajados"] += 1
+
+        meses[clave]["total_horas_normales"] += horas_normales
+        meses[clave]["total_horas_especiales"] += horas_especiales
         meses[clave]["total_sueldos"] += float(registro.sueldo_final or 0)
 
     return [meses[clave] for clave in sorted(meses.keys(), reverse=True)]

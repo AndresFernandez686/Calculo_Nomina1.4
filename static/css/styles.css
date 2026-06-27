@@ -538,13 +538,7 @@ tbody tr:hover {
   margin-top: 1.5rem;
 }
 
-.month-card .card-head h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-..month-summary {
-  margin-top: 1rem;
+.month-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1rem;
@@ -595,6 +589,43 @@ tbody tr:hover {
   font-size: 1rem;
   text-align: left;
   color: inherit;
+  gap: 1rem;
+}
+
+.accordion-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.accordion-title {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 0;
+}
+
+.month-summary.month-summary-compact {
+  margin-top: 0;
+  padding: 0;
+  background: transparent;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.8rem;
+}
+
+.month-summary.month-summary-compact span {
+  display: block;
+}
+
+.month-summary.month-summary-compact small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-bottom: 0.2rem;
+}
+
+.month-summary.month-summary-compact strong {
+  display: block;
+  font-size: 1.15rem;
+  line-height: 1.2;
 }
 
 .accordion-toggle:hover,
@@ -606,11 +637,23 @@ tbody tr:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   width: 30px;
   height: 30px;
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border);
+}
+
+@media (max-width: 720px) {
+  .accordion-toggle {
+    align-items: flex-start;
+  }
+
+  .month-summary.month-summary-compact {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
 }
 
 .accordion-panel {

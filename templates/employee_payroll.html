@@ -34,11 +34,32 @@
               aria-expanded="false"
               aria-controls="mes-panel-{{ loop.index }}"
             >
-              <span>{{ mes.mes_nombre }}</span>
+              <span class="accordion-main">
+                <span class="accordion-title">{{ mes.mes_nombre }}</span>
+              </span>
               <span class="accordion-icon" aria-hidden="true">+</span>
             </button>
           </div>
           <div id="mes-panel-{{ loop.index }}" class="accordion-panel" hidden>
+            <div class="month-summary">
+              <div>
+                <p>Dias Trabajados</p>
+                <strong>{{ mes.dias_trabajados }}</strong>
+              </div>
+              <div>
+                <p>Total Horas Normales</p>
+                <strong>{{ "%.2f"|format(mes.total_horas_normales) }}</strong>
+              </div>
+              <div>
+                <p>Total Horas Especiales</p>
+                <strong>{{ "%.2f"|format(mes.total_horas_especiales) }}</strong>
+              </div>
+              <div>
+                <p>Sueldo Total</p>
+                <strong>${{ "{:,.0f}".format(mes.total_sueldos) }}</strong>
+              </div>
+            </div>
+
             <div class="table-wrap">
               <table>
                 <thead>
@@ -62,7 +83,7 @@
                       <td>{{ registro.entrada or "-" }}</td>
                       <td>{{ registro.salida or "-" }}</td>
                       <td style="text-align: center;">
-                        <span class="badge" style="background-color: {% if registro.feriado == 'S' %}#ff6b6b{% else %}#ddd{% endif %};">
+                        <span class="badge{% if registro.feriado == 'S' %} badge-feriado{% endif %}">
                           {{ registro.feriado or "N" }}
                         </span>
                       </td>
@@ -86,20 +107,6 @@
               </table>
             </div>
 
-            <div class="month-summary">
-              <div>
-                <p>Total Horas Normales</p>
-                <strong>{{ "%.2f"|format(mes.total_horas_normales) }}</strong>
-              </div>
-              <div>
-                <p>Total Horas Especiales</p>
-                <strong>{{ "%.2f"|format(mes.total_horas_especiales) }}</strong>
-              </div>
-              <div>
-                <p>Sueldo Total</p>
-                <strong>${{ "{:,.0f}".format(mes.total_sueldos) }}</strong>
-              </div>
-            </div>
             <div class="month-actions">
               <a
                 class="btn btn-secondary btn-sm"
