@@ -1,137 +1,49 @@
-# 💰 Calculadora de Sueldos v1.4
+# Calculadora de Sueldos v1.4
 
-Sistema avanzado para el cálculo automático de sueldos basado en registros de entrada y salida de empleados.
+Sistema web en Flask para gestionar asistencia, calcular sueldos y administrar nómina por empleado con historial mensual.
 
-## 🆕 **NUEVA FUNCIONALIDAD v1.4: Gestión de Marcado Único**
+## Resumen del Sistema
 
-### ⭐ **Problema Resuelto**
-Cuando un empleado marca **solo 1 vez** en el día (en lugar de entrada + salida), el sistema ahora permite al administrador decidir explícitamente si fue **entrada** o **salida** y completar el horario faltante.
+- Carga de asistencia por Excel o por hasta 2 PDFs en una sola operación.
+- Cálculo de horas normales, horas especiales (20:00-22:00, +30%) y feriados (x2).
+- Gestión de descuentos (inventario, caja, retiro) y cálculo de sueldo final.
+- Historial por empleado, por mes, con vista detallada y exportación.
 
-### 🎯 **Características Principales**
-- ✅ **Detección Inteligente**: Identifica automáticamente registros incompletos
-- ✅ **Panel Administrativo**: Interfaz clara para tomar decisiones
-- ✅ **Control Total del Administrador**: El administrador decide completamente los horarios
-- ✅ **Horarios Ambiguos**: Detecta y permite corregir horarios mal asignados
-- ✅ **Cálculos Precisos**: Garantiza resultados correctos basados en decisiones administrativas
+## Funcionalidades Clave
 
-## 🚀 **Funcionalidades Generales**
+- Seguro IPS configurable por cálculo (Sí/No).
+- Desglose IPS completo: descuento del empleado, aporte empleador, total IPS y salario neto.
+- Detección/corrección de registros incompletos (marcado único) y horarios ambiguos.
+- Reemplazo inteligente de meses ya cargados para evitar duplicados.
 
-### 📊 **Procesamiento de Datos**
-- **Excel**: Carga y procesa archivos Excel tradicionales
-- **PDF**: Procesamiento inteligente de múltiples PDFs simultáneos
-- **Validación**: Verificación automática de estructura y datos
+## Módulo de Liquidaciones
 
-### ⏰ **Cálculo de Horas**
-- **Horas Normales**: Cálculo estándar de tiempo trabajado
-- **Horas Especiales**: 30% extra para horario 20:00-22:00
-- **Feriados**: Factor x2 para días feriados configurables
-- **Descuentos**: Inventario, caja y retiros
+- Vista de liquidaciones por empleado con interfaz renovada.
+- Sección Nueva liquidación con resumen de cálculo y tipos de liquidación.
+- Cálculo de vacaciones automático por antigüedad y proporcional por rango de fechas.
+- Base legal implementada según Código Laboral Paraguayo:
+  - 1 a 5 años: 12 días.
+  - Más de 5 a 10 años: 18 días.
+  - Más de 10 años: 30 días.
 
-### 🛠️ **Gestión de Casos Especiales**
-- **Marcado Único**: ⭐ Nueva funcionalidad para decidir entrada/salida
-- **Horarios Ambiguos**: Detección y corrección de horarios sospechosos
-- **Exclusión Automática**: Registros sin entrada ni salida (empleado no trabajó)
-- **Turnos Nocturnos**: Manejo correcto de horarios que cruzan medianoche
+## Interfaz y UX
 
-## 📁 **Estructura del Proyecto**
+- Diseño unificado en tarjetas, tabs y bloques de métricas.
+- Detalle mensual desplegable con mejor visualización de resultados.
+- Preparado para extender componentes reutilizables en futuras tarjetas.
 
-```
-Calculo_sueldo1.2/
-├── main.py                           # Aplicación principal Streamlit
-├── pdf_processor.py                  # Procesamiento inteligente de PDFs
-├── ui_components.py                  # Componentes de interfaz de usuario
-├── data_processor.py                 # Procesamiento de datos y cálculos
-├── calculations.py                   # Lógica de cálculo de horas
-├── smart_parser.py                   # Parser inteligente de horarios
-├── loading_components.py             # Componentes de carga y progreso
-├── styles.css                        # Estilos personalizados
-├── requirements.txt                  # Dependencias Python
-├── run_app.bat                       # Script de ejecución Windows
-├── plantilla_sueldos_feriados_dias.xlsx  # Plantilla Excel
-├── NUEVA_FUNCIONALIDAD_MARCADO_UNICO.md   # ⭐ Documentación nueva funcionalidad
-└── EJEMPLO_USO_MARCADO_UNICO.md          # ⭐ Ejemplos de uso
-```
+## Ejecución Rápida
 
-## 🔧 **Instalación y Uso**
-
-### **Opción 1: Ejecutar con Batch (Recomendado)**
 ```bash
-# Hacer doble clic en:
-run_app.bat
-```
-
-### **Opción 2: Ejecución Manual**
-```bash
-# 1. Instalar dependencias
 pip install -r requirements.txt
-
-# 2. Ejecutar aplicación
-streamlit run main.py
+python app.py
 ```
 
-## 📋 **Flujo de Trabajo**
+## Stack Tecnológico
 
-### **1. Configuración**
-- Descargar plantilla Excel si es necesario
-- Configurar valor por hora
-- Seleccionar feriados del calendario
+- Backend: Flask + SQLAlchemy
+- Datos: Pandas + OpenPyXL
+- PDF: pdfplumber
+- Frontend: HTML + CSS + JavaScript
 
-### **2. Subir Archivo**
-- **Excel**: Archivo único con estructura predefinida
-- **PDF**: Uno o múltiples archivos PDF simultáneos
-
-### **3. ⭐ Corrección de Registros Incompletos (NUEVO)**
-Si hay empleados que marcaron solo una vez:
-- El sistema detecta automáticamente los casos
-- Se muestra panel administrativo para cada empleado
-- Administrador decide si el horario fue entrada o salida
-- Sistema sugiere horario faltante basado en contexto
-- Se valida y aplican las correcciones
-
-### **4. Revisión de Horarios Ambiguos (NUEVO)**
-Si hay horarios sospechosos (ej: entrada muy tarde):
-- Sistema detecta patrones anómalos
-- Permite intercambiar entrada ↔ salida si es necesario
-- Muestra impacto en horas calculadas
-
-### **5. Cálculo y Descarga**
-- Procesamiento automático con todas las correcciones
-- Generación de reporte final en Excel
-- Descarga con nombre automático basado en archivo fuente
-
-## 📊 **Ejemplo de Caso de Uso**
-
-```
-🔍 Detección: María González marcó solo a las 22:00
-💡 Sugerencia: "Horario nocturno - podría ser SALIDA tardía"
-👨‍💼 Decisión Admin: "Fue SALIDA"
-⏰ Completa entrada: 14:00 (sugerido automáticamente)
-✅ Resultado: 14:00 → 22:00 = 8 horas trabajadas
-```
-
-## 🛠️ **Tecnologías Utilizadas**
-
-- **Frontend**: Flask + HTML/CSS personalizado
-- **Backend**: Python 3.8+
-- **Procesamiento**: Pandas, OpenPyXL
-- **PDFs**: pdfplumber (opcional)
-- **UI/UX**: Componentes interactivos avanzados
-- IA para desarrollo de codigo y optimizacion
-
-## 📈 **Mejoras en v1.4**
-
-- ✅ **Detección automática de marcado único**
-- ✅ **Panel administrativo intuitivo**
-- ✅ **Sugerencias contextuales inteligentes**
-- ✅ **Detección de horarios ambiguos**
-- ✅ **Interfaz mejorada para correcciones**
-- ✅ **Validaciones más robustas**
-- ✅ **Documentación completa**
-
-## 🔗 **Documentación Adicional**
-
-- [📝 Nueva Funcionalidad Detallada](NUEVA_FUNCIONALIDAD_MARCADO_UNICO.md)
-- [📋 Ejemplos de Uso](EJEMPLO_USO_MARCADO_UNICO.md)
-
-
-**Versión**: 1.3 | **Fecha**: Noviembre 2024 | **Estado**: ✅ Producción
+Estado: En evolución activa

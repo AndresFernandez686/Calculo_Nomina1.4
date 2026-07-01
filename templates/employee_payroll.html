@@ -40,49 +40,110 @@
             </button>
           </div>
           <div id="mes-panel-{{ loop.index }}" class="accordion-panel" hidden>
-            <div class="month-summary">
-              <div>
-                <p>Dias Trabajados</p>
-                <strong>{{ mes.dias_trabajados }}</strong>
+            <div class="payroll-details">
+              <div class="payroll-metrics-grid">
+                <article class="payroll-metric-card">
+                  <p>Días Trabajados</p>
+                  <strong>{{ mes.dias_trabajados }}</strong>
+                  <small>del mes</small>
+                </article>
+                <article class="payroll-metric-card">
+                  <p>Total Horas Normales</p>
+                  <strong>{{ "%.2f"|format(mes.total_horas_normales) }}</strong>
+                  <small>Promedio: {{ "%.2f"|format((mes.total_horas_normales / mes.dias_trabajados) if mes.dias_trabajados else 0) }} h/día</small>
+                </article>
+                <article class="payroll-metric-card">
+                  <p>Total Horas Especiales</p>
+                  <strong>{{ "%.2f"|format(mes.total_horas_especiales) }}</strong>
+                  <small>Promedio: {{ "%.2f"|format((mes.total_horas_especiales / mes.dias_trabajados) if mes.dias_trabajados else 0) }} h/día</small>
+                </article>
+                <article class="payroll-metric-card payroll-metric-card-accent">
+                  <p>Sueldo Total</p>
+                  <strong>${{ "{:,.0f}".format(mes.total_sueldos) }}</strong>
+                  <small>Bruto del mes</small>
+                </article>
               </div>
-              <div>
-                <p>Total Horas Normales</p>
-                <strong>{{ "%.2f"|format(mes.total_horas_normales) }}</strong>
-              </div>
-              <div>
-                <p>Total Horas Especiales</p>
-                <strong>{{ "%.2f"|format(mes.total_horas_especiales) }}</strong>
-              </div>
-              <div>
-                <p>Sueldo Total</p>
-                <strong>${{ "{:,.0f}".format(mes.total_sueldos) }}</strong>
-              </div>
-            </div>
 
-            <div class="summary-box" style="margin-top: 1rem;">
-              <h3 style="margin-bottom: .5rem;">Desglose del salario bruto</h3>
-              <ul>
-                <li>Horas normales: <strong>{{ mes.total_horas_normales | hhmm }}</strong> &middot; <strong>Gs {{ "{:,.2f}".format(mes.monto_horas_normales or 0) }}</strong></li>
-                <li>Horas especiales: <strong>{{ mes.total_horas_especiales | hhmm }}</strong> &middot; <strong>Gs {{ "{:,.2f}".format(mes.monto_horas_especiales or 0) }}</strong></li>
-                <li>Feriados (extra): <strong>Gs {{ "{:,.2f}".format(mes.monto_feriados or 0) }}</strong></li>
-                <li>Bonificación: <strong>Gs {{ "{:,.2f}".format(mes.bonificacion or 0) }}</strong></li>
-                <li><strong>Salario bruto:</strong> <strong>Gs {{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</strong></li>
-              </ul>
-            </div>
+              <h3 class="section-title">Desglose del salario bruto</h3>
+              <div class="table-wrap payroll-breakdown-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Concepto</th>
+                      <th style="text-align: right;">Horas</th>
+                      <th style="text-align: right;">Valor por Hora</th>
+                      <th style="text-align: right;">Total (Gs.)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><span class="payroll-dot payroll-dot-normal"></span>Horas normales</td>
+                      <td style="text-align: right;">{{ mes.total_horas_normales | hhmm }}</td>
+                      <td style="text-align: right;">${{ "{:,.0f}".format(((mes.monto_horas_normales or 0) / mes.total_horas_normales) if mes.total_horas_normales else 0) }}</td>
+                      <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_horas_normales or 0) }}</td>
+                    </tr>
+                    <tr>
+                      <td><span class="payroll-dot payroll-dot-special"></span>Horas especiales (+30%)</td>
+                      <td style="text-align: right;">{{ mes.total_horas_especiales | hhmm }}</td>
+                      <td style="text-align: right;">${{ "{:,.0f}".format(((mes.monto_horas_especiales or 0) / mes.total_horas_especiales) if mes.total_horas_especiales else 0) }}</td>
+                      <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_horas_especiales or 0) }}</td>
+                    </tr>
+                    <tr>
+                      <td><span class="payroll-dot payroll-dot-feriado"></span>Feriados (extra x2)</td>
+                      <td style="text-align: right;">{{ "0:00" if not mes.monto_feriados else "--" }}</td>
+                      <td style="text-align: right;">${{ "{:,.0f}".format((((mes.monto_horas_normales or 0) / mes.total_horas_normales) * 2) if mes.total_horas_normales else 0) }}</td>
+                      <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_feriados or 0) }}</td>
+                    </tr>
+                    <tr>
+                      <td><span class="payroll-dot payroll-dot-bono"></span>Bonificación</td>
+                      <td style="text-align: right;">—</td>
+                      <td style="text-align: right;">—</td>
+                      <td style="text-align: right;">${{ "{:,.2f}".format(mes.bonificacion or 0) }}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colspan="3">Salario bruto</td>
+                      <td style="text-align: right;" class="liquidacion-total">${{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
 
-            <div class="summary-box" style="margin-top: 1rem;">
-              <h3 style="margin-bottom: .5rem;">Resumen IPS</h3>
-              <ul>
-                <li>Salario bruto total: <strong>Gs {{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</strong></li>
-                <li>Descuento del empleado (9%): <strong>Gs {{ "{:,.2f}".format(mes.total_descuento_ips or 0) }}</strong></li>
-                <li>Aporte empleador (16.5%): <strong>Gs {{ "{:,.2f}".format(mes.total_aporte_empleador_ips or 0) }}</strong></li>
-                <li>Total abonar IPS: <strong>Gs {{ "{:,.2f}".format(mes.total_ips or 0) }}</strong></li>
-                <li>Salario neto del empleado: <strong>Gs {{ "{:,.2f}".format(mes.total_salario_neto_ips or 0) }}</strong></li>
-              </ul>
-            </div>
+              <h3 class="section-title">Resumen IPS</h3>
+              <div class="payroll-ips-grid">
+                <div class="table-wrap">
+                  <table>
+                    <tbody>
+                      <tr>
+                        <td>Salario bruto total</td>
+                        <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</strong></td>
+                      </tr>
+                      <tr>
+                        <td>Descuento del empleado (9%)</td>
+                        <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_descuento_ips or 0) }}</strong></td>
+                      </tr>
+                      <tr>
+                        <td>Aporte empleador (16.5%)</td>
+                        <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_aporte_empleador_ips or 0) }}</strong></td>
+                      </tr>
+                      <tr>
+                        <td>Total abonar IPS</td>
+                        <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_ips or 0) }}</strong></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <aside class="payroll-net-card">
+                  <p>Salario neto del empleado</p>
+                  <strong>${{ "{:,.2f}".format(mes.total_salario_neto_ips or 0) }}</strong>
+                  <small>Monto que recibe el empleado</small>
+                </aside>
+              </div>
 
-            <div class="table-wrap">
-              <table>
+              <h3 class="section-title">Detalle diario de asistencia</h3>
+              <div class="table-wrap">
+                <table>
                 <thead>
                   <tr>
                     <th>Fecha</th>
@@ -97,7 +158,7 @@
                     <th style="text-align: right;">Sueldo Final</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody id="days-tbody-{{ loop.index }}" class="js-days-body" data-limit="5">
                   {% for registro in mes.registros %}
                     <tr>
                       <td>{{ registro.fecha }}</td>
@@ -126,21 +187,29 @@
                   {% endfor %}
                 </tbody>
               </table>
-            </div>
+              </div>
 
-            <div class="month-actions">
-              <a
-                class="btn btn-secondary btn-sm"
-                href="{{ url_for('descargar_mes', empleado_id=empleado.id, year=mes.year, month=mes.month, format='xlsx') }}"
-              >
-                Descargar Excel
-              </a>
-              <a
-                class="btn btn-secondary btn-sm"
-                href="{{ url_for('descargar_mes', empleado_id=empleado.id, year=mes.year, month=mes.month, format='pdf') }}"
-              >
-                Descargar PDF
-              </a>
+              <div class="month-actions month-actions-detail">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm js-toggle-days"
+                  data-target="days-tbody-{{ loop.index }}"
+                >
+                  Ver todos los días del mes
+                </button>
+                <a
+                  class="btn btn-secondary btn-sm"
+                  href="{{ url_for('descargar_mes', empleado_id=empleado.id, year=mes.year, month=mes.month, format='xlsx') }}"
+                >
+                  Descargar Excel
+                </a>
+                <a
+                  class="btn btn-secondary btn-sm"
+                  href="{{ url_for('descargar_mes', empleado_id=empleado.id, year=mes.year, month=mes.month, format='pdf') }}"
+                >
+                  Descargar PDF
+                </a>
+              </div>
             </div>
           </div>
       </div>
@@ -154,7 +223,37 @@
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const accordions = document.querySelectorAll('.month-card .accordion-toggle');
+    const accordions = document.querySelectorAll('.accordion-toggle');
+    const dayBodies = document.querySelectorAll('.js-days-body');
+    const toggleDayButtons = document.querySelectorAll('.js-toggle-days');
+
+    function applyRowsPreview(tbody, expanded) {
+      const limit = Number(tbody.dataset.limit || '5');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.forEach((row, index) => {
+        row.hidden = !expanded && index >= limit;
+      });
+    }
+
+    dayBodies.forEach((tbody) => {
+      applyRowsPreview(tbody, false);
+    });
+
+    toggleDayButtons.forEach((button) => {
+      button.addEventListener('click', function () {
+        const targetId = this.dataset.target;
+        const tbody = document.getElementById(targetId);
+        if (!tbody) return;
+
+        const expanded = this.dataset.expanded === 'true';
+        const nextExpanded = !expanded;
+        applyRowsPreview(tbody, nextExpanded);
+        this.dataset.expanded = nextExpanded ? 'true' : 'false';
+        this.textContent = nextExpanded
+          ? 'Mostrar resumen de días'
+          : 'Ver todos los días del mes';
+      });
+    });
 
     function closeAllPanels() {
       accordions.forEach((toggle) => {

@@ -569,6 +569,128 @@ tbody tr:hover {
   flex: 1 1 auto;
 }
 
+.payroll-details {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.payroll-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.8rem;
+}
+
+.payroll-metric-card {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem;
+}
+
+.payroll-metric-card p {
+  margin: 0 0 0.25rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.payroll-metric-card strong {
+  display: block;
+  font-size: 1.65rem;
+  line-height: 1.1;
+}
+
+.payroll-metric-card small {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.payroll-metric-card-accent {
+  background: var(--success-soft);
+  border-color: #bbf7d0;
+}
+
+.payroll-metric-card-accent strong {
+  color: #065f46;
+}
+
+.payroll-breakdown-wrap .payroll-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+.payroll-dot-normal {
+  background: #2563eb;
+}
+
+.payroll-dot-special {
+  background: #f59e0b;
+}
+
+.payroll-dot-feriado {
+  background: #ef4444;
+}
+
+.payroll-dot-bono {
+  background: #10b981;
+}
+
+.payroll-ips-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 0.9rem;
+  align-items: stretch;
+}
+
+.payroll-net-card {
+  border: 1px solid #bbf7d0;
+  background: var(--success-soft);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.payroll-net-card p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #065f46;
+  font-weight: 600;
+}
+
+.payroll-net-card strong {
+  margin-top: 0.35rem;
+  font-size: 2rem;
+  line-height: 1;
+  color: #065f46;
+}
+
+.payroll-net-card small {
+  margin-top: 0.35rem;
+  color: #047857;
+}
+
+.month-actions-detail {
+  margin-top: 0.25rem;
+  justify-content: center;
+}
+
+.month-actions-detail .btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .payroll-ips-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .month-card {
   margin-top: 1.5rem;
 }
@@ -784,4 +906,286 @@ tbody tr:hover {
   color: var(--text-muted);
   font-size: 0.82rem;
   padding: 2rem 1rem;
+}
+
+/* ---------------- Liquidaciones ---------------- */
+.liquidaciones-layout {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.liquidaciones-dashboard {
+  display: grid;
+  gap: 1.2rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+
+@media (min-width: 960px) {
+  .liquidaciones-dashboard {
+    grid-template-columns: 1.8fr 1fr;
+    grid-template-areas:
+      "main side"
+      "types history";
+  }
+
+  .liquidaciones-dashboard > .card:nth-child(1) {
+    grid-area: main;
+  }
+
+  .liquidaciones-dashboard > aside {
+    grid-area: side;
+  }
+
+  .liquidaciones-dashboard > .card:nth-child(3) {
+    grid-area: types;
+  }
+
+  .liquidaciones-dashboard > .card:nth-child(4) {
+    grid-area: history;
+  }
+}
+
+.liquidaciones-main,
+.liquidaciones-side {
+  min-width: 0;
+}
+
+.liquidacion-side-card + .liquidacion-side-card {
+  margin-top: 1.2rem;
+}
+
+@media (min-width: 960px) {
+  .liquidaciones-layout {
+    grid-template-columns: 1.8fr 1fr;
+    align-items: start;
+  }
+}
+
+.liquidaciones-tabs {
+  display: flex;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.liquidacion-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.6rem 0.3rem;
+  border-bottom: 2px solid transparent;
+}
+
+.liquidacion-tab.is-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.liquidacion-pane {
+  animation: fadeIn 0.22s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.liquidacion-form-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.liquidacion-table-wrap table tbody td:last-child,
+.liquidacion-table-wrap table tfoot td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.liquidacion-monto {
+  font-weight: 600;
+}
+
+.liquidacion-total {
+  color: var(--primary);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.liquidacion-table-wrap tfoot td {
+  background: var(--surface-2);
+  font-weight: 700;
+}
+
+.liquidacion-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.tipos-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.tipo-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem;
+  background: var(--surface);
+}
+
+.tipo-card h4 {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+}
+
+.tipo-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.tipo-card.is-active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.liquidacion-side-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.liquidacion-side-box h3 {
+  margin: 0 0 0.9rem;
+  font-size: 1.02rem;
+}
+
+.estado-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.estado-label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.estado-grid strong,
+.estado-pendientes strong {
+  font-size: 1rem;
+}
+
+.estado-pendientes {
+  margin-top: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  background: var(--surface-2);
+}
+
+.donut-wrap {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.donut-chart {
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: conic-gradient(var(--primary) 0 83.8%, #facc15 83.8% 100%);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.donut-chart::after {
+  content: "";
+  position: absolute;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.donut-chart span {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.donut-legend p {
+  margin: 0 0 0.45rem;
+  font-size: 0.84rem;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+}
+
+.dot-blue {
+  background: var(--primary);
+}
+
+.dot-yellow {
+  background: #facc15;
+}
+
+.dot-gray {
+  background: #cbd5e1;
+}
+
+.liq-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.liq-history-list li {
+  display: grid;
+  grid-template-columns: 92px 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.84rem;
+}
+
+.liq-history-list li:last-child {
+  border-bottom: none;
+}
+
+.liq-history-list strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.liq-history-link {
+  display: inline-block;
+  margin-top: 0.8rem;
+  padding: 0;
 }

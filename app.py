@@ -100,6 +100,25 @@ def _parse_feriados(form):
     return fechas
 
 
+def _normalizar_hora_pdf(valor):
+    """Normaliza horas de PDF a HH:MM para evitar descarte por formato."""
+    if pd.isna(valor):
+        return valor
+
+    texto = str(valor).strip()
+    if not texto:
+        return texto
+
+    match = re.search(r"^(\d{1,2}):(\d{2})(?::\d{2})?$", texto)
+    if match:
+        hora = int(match.group(1))
+        minuto = int(match.group(2))
+        if 0 <= hora <= 23 and 0 <= minuto <= 59:
+            return f"{hora:02d}:{minuto:02d}"
+
+    return texto
+
+
 def _guardar_pendiente(df, config):
     """Persiste el DataFrame y la configuración en disco hasta confirmar correcciones."""
     token = uuid.uuid4().hex
@@ -1027,7 +1046,18 @@ def liquidaciones(empleado_id):
     if not empleado:
         abort(404)
 
-    mensaje = obtener_mensaje_liquidacion()
+    registros = (
+        EmployeePayroll.query.filter_by(employee_id=empleado_id)
+        .order_by(text("employee_payroll.fecha ASC"))
+        .all()
+    )
+
+    historial_mensual = [{"fecha": r.fecha} for r in registros if getattr(r, "fecha", None)]
+    try:
+        mensaje = obtener_mensaje_liquidacion(historial_mensual=historial_mensual)
+    except ValueError:
+        mensaje = "Sin datos suficientes para calcular vacaciones"
+
     return render_template(
         "liquidaciones.html",
         empleado=empleado,
@@ -1121,10 +1151,20 @@ def procesar():
                 df_temp = procesar_pdf_a_dataframe(archivo)
                 if df_temp.empty:
                     continue
+
+                for col_hora in ("Entrada", "Salida"):
+                    if col_hora in df_temp.columns:
+                        df_temp[col_hora] = df_temp[col_hora].apply(_normalizar_hora_pdf)
+
                 es_valido, _ = validar_datos_pdf(df_temp)
-                if es_valido:
-                    dataframes.append(df_temp)
-                    nombres.append(archivo.filename)
+                if not es_valido:
+                    flash(
+                        f"El PDF {archivo.filename} tiene filas con formato irregular; se intentará procesar igual.",
+                        "warning",
+                    )
+
+                dataframes.append(df_temp)
+                nombres.append(archivo.filename)
 
             if not dataframes:
                 flash(
@@ -1161,14 +1201,22 @@ def procesar():
     df_con_asistencia, df_sin_asistencia = filtrar_registros_sin_asistencia(df)
     df = df_con_asistencia.reset_index(drop=True)
 
-    coincidencia = df["Empleado"].astype(str).apply(lambda x: _empleado_coincide(x, empleado))
-    df = df[coincidencia].copy()
-    if df.empty:
-        flash(
-            f"No se encontraron registros de asistencia para {empleado.nombre} en el archivo.",
-            "error",
-        )
-        return redirect(url_for("index", empleado_id=employee_id))
+    if tipo_archivo == "pdf":
+        if df.empty:
+            flash(
+                f"No se encontraron registros de asistencia para {empleado.nombre} en los PDF.",
+                "error",
+            )
+            return redirect(url_for("index", empleado_id=employee_id))
+    else:
+        coincidencia = df["Empleado"].astype(str).apply(lambda x: _empleado_coincide(x, empleado))
+        df = df[coincidencia].copy()
+        if df.empty:
+            flash(
+                f"No se encontraron registros de asistencia para {empleado.nombre} en el archivo.",
+                "error",
+            )
+            return redirect(url_for("index", empleado_id=employee_id))
 
     df.loc[:, "Empleado"] = empleado.nombre
 
