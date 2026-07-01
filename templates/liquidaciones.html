@@ -15,7 +15,7 @@
   </a>
 </div>
 
-<div class="liquidaciones-dashboard">
+<form method="POST" class="liquidaciones-dashboard">
   <section class="card">
     <div class="card-head">
       <h2>Liquidaciones</h2>
@@ -43,15 +43,32 @@
           <div class="field">
             <label class="field-label" for="liq_tipo">Tipo de liquidación</label>
             <select id="liq_tipo" name="liq_tipo">
-              <option selected>Renuncia voluntaria</option>
-              <option>Despido sin causa</option>
-              <option>Despido con causa</option>
-              <option>Fin de contrato</option>
+              <option value="renuncia-voluntaria" data-key="renuncia-voluntaria" {% if selected_liquidation_type == 'renuncia-voluntaria' %}selected{% endif %}>Renuncia voluntaria</option>
+              <option value="despido-sin-causa" data-key="despido-sin-causa" {% if selected_liquidation_type == 'despido-sin-causa' %}selected{% endif %}>Despido sin causa</option>
+              <option value="despido-con-causa" data-key="despido-con-causa" {% if selected_liquidation_type == 'despido-con-causa' %}selected{% endif %}>Despido con causa</option>
+              <option value="fin-de-contrato" data-key="fin-de-contrato" {% if selected_liquidation_type == 'fin-de-contrato' %}selected{% endif %}>Fin de contrato</option>
             </select>
           </div>
           <div class="field">
             <label class="field-label" for="liq_salida">Fecha de salida</label>
-            <input id="liq_salida" name="liq_salida" type="date" />
+            <input id="liq_salida" name="liq_salida" type="date" value="{{ fecha_salida_default }}" />
+          </div>
+        </div>
+
+        <div class="liq-concepts-box" id="liq_concepts_box">
+          <div class="liq-concepts-head">
+            <h3>Conceptos incluidos</h3>
+            <p class="muted" id="liq_concepts_hint">Renuncia voluntaria</p>
+          </div>
+          <div class="liq-concepts-grid">
+            <div>
+              <p class="liq-concepts-label">Incluye</p>
+              <ul id="liq_includes_list" class="liq-concepts-list"></ul>
+            </div>
+            <div>
+              <p class="liq-concepts-label">No incluye</p>
+              <ul id="liq_excludes_list" class="liq-concepts-list"></ul>
+            </div>
           </div>
         </div>
 
@@ -68,34 +85,34 @@
             <tbody>
               <tr>
                 <td>Salario pendiente</td>
-                <td>Hasta fecha de salida</td>
-                <td class="liquidacion-monto">1,150,000</td>
+                <td data-detail="salary_pending">{{ detalle_salario_pendiente }}</td>
+                <td class="liquidacion-monto">Gs. {{ "{:,.0f}".format(salario_pendiente or 0) }}</td>
               </tr>
               <tr>
                 <td>Aguinaldo proporcional</td>
-                <td>Enero - Junio (6/12)</td>
-                <td class="liquidacion-monto">1,125,000</td>
+                <td data-detail="aguinaldo">{{ detalle_aguinaldo }}</td>
+                <td class="liquidacion-monto">Gs. {{ "{:,.0f}".format(aguinaldo or 0) }}</td>
               </tr>
               <tr>
-                <td>Vacaciones no gozadas</td>
-                <td>{{ mensaje.replace('\n', ' · ') }}</td>
-                <td class="liquidacion-monto">201,000</td>
+                <td data-label="vacations">Vacaciones no gozadas</td>
+                <td data-detail="vacations">{{ detalle_vacaciones }}</td>
+                <td class="liquidacion-monto">Gs. {{ "{:,.0f}".format(monto_vacaciones_pendientes or 0) }}</td>
               </tr>
-              <tr>
+              <tr data-concept-row="preaviso">
                 <td>Preaviso</td>
-                <td>No aplica (renuncia voluntaria)</td>
-                <td class="liquidacion-monto">0</td>
+                <td data-detail="preaviso">{{ detalle_preaviso }}</td>
+                <td class="liquidacion-monto">Gs. {{ "{:,.0f}".format(preaviso or 0) }}</td>
               </tr>
-              <tr>
+              <tr data-concept-row="indemnizacion">
                 <td>Indemnización</td>
-                <td>No aplica (renuncia voluntaria)</td>
-                <td class="liquidacion-monto">0</td>
+                <td data-detail="indemnizacion">{{ detalle_indemnizacion }}</td>
+                <td class="liquidacion-monto">Gs. {{ "{:,.0f}".format(indemnizacion or 0) }}</td>
               </tr>
             </tbody>
             <tfoot>
               <tr>
                 <td colspan="2">Total a pagar</td>
-                <td class="liquidacion-total">2,476,000</td>
+                <td class="liquidacion-total">Gs. {{ "{:,.0f}".format(total_liquidacion or 0) }}</td>
               </tr>
             </tfoot>
           </table>
@@ -103,7 +120,7 @@
 
         <div class="liquidacion-actions">
           <button type="button" class="btn btn-ghost">Vista previa PDF</button>
-          <button type="button" class="btn btn-primary">Generar liquidación</button>
+          <button type="submit" class="btn btn-primary">Generar liquidación</button>
         </div>
       </section>
 
@@ -117,28 +134,49 @@
   <aside>
     <section class="card liquidacion-side-card">
       <div class="card-body">
-        <h3>Estado actual</h3>
+        <h3>Estado de vacaciones</h3>
+        <div class="vacation-state-copy">
+          <p><strong>Vacaciones generadas:</strong> {{ vacaciones_generadas|round(2) }} días</p>
+        </div>
+        <div class="field">
+          <label class="field-label" for="vacaciones_usadas">Vacaciones utilizadas</label>
+          <input id="vacaciones_usadas" name="vacaciones_usadas" type="number" min="0" step="0.01" value="{{ vacaciones_usadas|round(2) }}" />
+        </div>
+        <div class="vacation-range-grid">
+          <div class="field">
+            <label class="field-label" for="vacaciones_desde">Desde</label>
+            <input id="vacaciones_desde" name="vacaciones_desde" type="date" value="{{ vacaciones_desde }}" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="vacaciones_hasta">Hasta</label>
+            <input id="vacaciones_hasta" name="vacaciones_hasta" type="date" value="{{ vacaciones_hasta }}" />
+          </div>
+        </div>
         <div class="estado-grid">
           <div>
-            <p class="estado-label">Fecha de ingreso</p>
-            <strong>10/01/2025</strong>
-          </div>
-          <div>
-            <p class="estado-label">Días trabajados</p>
-            <strong>169 días</strong>
+            <p class="estado-label">Períodos registrados</p>
+            <strong>{{ periodos_registrados }} mes{{ 'es' if periodos_registrados != 1 else '' }}</strong>
           </div>
           <div>
             <p class="estado-label">Vacaciones generadas</p>
-            <strong>12.42 días</strong>
+            <strong>{{ vacaciones_generadas|round(2) }} días</strong>
           </div>
           <div>
             <p class="estado-label">Vacaciones utilizadas</p>
-            <strong>10.41 días</strong>
+            <strong>{{ vacaciones_usadas|round(2) }} días</strong>
+          </div>
+          <div>
+            <p class="estado-label">Vacaciones pendientes</p>
+            <strong>{{ vacaciones_pendientes|round(2) }} días</strong>
+          </div>
+          <div>
+            <p class="estado-label">Fecha de ingreso</p>
+            <strong>{{ fecha_ingreso|default('N/D') }}</strong>
           </div>
         </div>
         <div class="estado-pendientes">
           <p class="estado-label">Vacaciones pendientes</p>
-          <strong>2.01 días</strong>
+          <strong>{{ vacaciones_pendientes|round(2) }} días</strong>
         </div>
       </div>
     </section>
@@ -147,11 +185,11 @@
       <div class="card-body">
         <h3>Distribución de vacaciones</h3>
         <div class="donut-wrap">
-          <div class="donut-chart" aria-hidden="true"><span>12.42<br />días</span></div>
+          <div class="donut-chart" aria-hidden="true"><span>{{ vacaciones_generadas|round(2) }}<br />días</span></div>
           <div class="donut-legend">
-            <p><span class="dot dot-blue"></span>Utilizadas: 10.41 días (83.8%)</p>
-            <p><span class="dot dot-yellow"></span>Pendientes: 2.01 días (16.2%)</p>
-            <p><span class="dot dot-gray"></span>Proporcionales: 12.42 días (100%)</p>
+            <p><span class="dot dot-blue"></span>Utilizadas: {{ vacaciones_usadas|round(2) }} días</p>
+            <p><span class="dot dot-yellow"></span>Pendientes: {{ vacaciones_pendientes|round(2) }} días</p>
+            <p><span class="dot dot-gray"></span>Promedio diario: Gs. {{ "{:,.0f}".format(promedio_diario_vacaciones or 0) }}</p>
           </div>
         </div>
       </div>
@@ -162,19 +200,19 @@
     <div class="card-body">
       <h3 class="section-title">Tipos de liquidación disponibles</h3>
       <div class="tipos-grid">
-        <article class="tipo-card is-active">
+        <article class="tipo-card is-active" data-type-card="renuncia-voluntaria">
           <h4>Renuncia voluntaria</h4>
           <p>Incluye salario pendiente, aguinaldo proporcional y vacaciones no gozadas.</p>
         </article>
-        <article class="tipo-card">
+        <article class="tipo-card" data-type-card="despido-sin-causa">
           <h4>Despido sin causa</h4>
           <p>Incluye todo + preaviso e indemnización por despido injustificado.</p>
         </article>
-        <article class="tipo-card">
+        <article class="tipo-card" data-type-card="despido-con-causa">
           <h4>Despido con causa</h4>
           <p>Incluye salario pendiente y aguinaldo proporcional. No incluye indemnización.</p>
         </article>
-        <article class="tipo-card">
+        <article class="tipo-card" data-type-card="fin-de-contrato">
           <h4>Fin de contrato</h4>
           <p>Incluye salario pendiente, aguinaldo proporcional y vacaciones no gozadas.</p>
         </article>
@@ -193,7 +231,8 @@
       <a href="#" class="liq-history-link">Ver historial completo</a>
     </div>
   </section>
-</div>
+  <input type="hidden" id="vacation_generated_hidden" value="{{ vacaciones_generadas|round(2) }}" />
+</form>
 {% endblock %}
 
 {% block scripts %}
@@ -201,6 +240,74 @@
   (function () {
     const tabs = document.querySelectorAll(".liquidacion-tab");
     const panes = document.querySelectorAll(".liquidacion-pane");
+    const typeSelect = document.getElementById("liq_tipo");
+    const conceptHint = document.getElementById("liq_concepts_hint");
+    const includesList = document.getElementById("liq_includes_list");
+    const excludesList = document.getElementById("liq_excludes_list");
+    const vacationUsedInput = document.getElementById("vacaciones_usadas");
+    const vacationFromInput = document.getElementById("vacaciones_desde");
+    const vacationToInput = document.getElementById("vacaciones_hasta");
+    const vacationGeneratedHidden = document.getElementById("vacation_generated_hidden");
+    const vacationPendingFields = document.querySelectorAll(".estado-pendientes strong, .donut-legend p:nth-child(2)");
+    const conceptRows = {
+      preaviso: document.querySelector('[data-concept-row="preaviso"]'),
+      indemnizacion: document.querySelector('[data-concept-row="indemnizacion"]'),
+    };
+
+    const liquidationTypes = {
+      "renuncia-voluntaria": {
+        label: "Renuncia voluntaria",
+        includes: ["Salario pendiente", "Aguinaldo proporcional", "Vacaciones no utilizadas"],
+        excludes: ["Indemnización", "Preaviso"],
+        details: {
+          preaviso: "No aplica (renuncia voluntaria)",
+          indemnizacion: "No aplica (renuncia voluntaria)",
+        },
+        showRows: {
+          preaviso: false,
+          indemnizacion: false,
+        },
+      },
+      "despido-sin-causa": {
+        label: "Despido sin causa",
+        includes: ["Salario pendiente", "Aguinaldo proporcional", "Vacaciones", "Preaviso", "Indemnización"],
+        excludes: [],
+        details: {
+          preaviso: "Aplica por despido sin causa",
+          indemnizacion: "Aplica por despido sin causa",
+        },
+        showRows: {
+          preaviso: true,
+          indemnizacion: true,
+        },
+      },
+      "despido-con-causa": {
+        label: "Despido con causa",
+        includes: ["Salario pendiente", "Aguinaldo proporcional", "Vacaciones"],
+        excludes: ["Indemnización", "Preaviso"],
+        details: {
+          preaviso: "No aplica (despido con causa)",
+          indemnizacion: "No aplica (despido con causa)",
+        },
+        showRows: {
+          preaviso: false,
+          indemnizacion: false,
+        },
+      },
+      "fin-de-contrato": {
+        label: "Fin de contrato",
+        includes: ["Salario pendiente", "Aguinaldo proporcional", "Vacaciones"],
+        excludes: ["Indemnización"],
+        details: {
+          preaviso: "Puede evaluarse según el caso",
+          indemnizacion: "No aplica (fin de contrato)",
+        },
+        showRows: {
+          preaviso: true,
+          indemnizacion: false,
+        },
+      },
+    };
 
     function activateTab(target) {
       tabs.forEach((tab) => {
@@ -215,11 +322,106 @@
       });
     }
 
+    function renderConcepts() {
+      if (!typeSelect) return;
+
+      const selectedOption = typeSelect.selectedOptions[0];
+      const typeKey = selectedOption ? selectedOption.dataset.key : "renuncia-voluntaria";
+      const config = liquidationTypes[typeKey] || liquidationTypes["renuncia-voluntaria"];
+
+      if (conceptHint) {
+        conceptHint.textContent = config.label;
+      }
+
+      if (includesList) {
+        includesList.innerHTML = config.includes.map((item) => `<li>✔ ${item}</li>`).join("");
+      }
+
+      if (excludesList) {
+        excludesList.innerHTML = config.excludes.length
+          ? config.excludes.map((item) => `<li>✘ ${item}</li>`).join("")
+          : "<li class='muted'>No hay conceptos excluidos</li>";
+      }
+
+      Object.entries(conceptRows).forEach(([key, row]) => {
+        if (!row) return;
+        const detailCell = row.querySelector(`[data-detail="${key}"]`);
+        if (detailCell && config.details[key]) {
+          detailCell.textContent = config.details[key];
+        }
+        row.hidden = !config.showRows[key];
+      });
+
+      document.querySelectorAll("[data-type-card]").forEach((card) => {
+        card.classList.toggle("is-active", card.dataset.typeCard === typeKey);
+      });
+    }
+
+    function updateVacationPendingPreview() {
+      if (!vacationUsedInput || !vacationGeneratedHidden) return;
+
+      const generated = Number(vacationGeneratedHidden.value || 0);
+      const used = Number(vacationUsedInput.value || 0);
+      const pending = Math.max(generated - used, 0);
+      const formatted = pending.toFixed(2);
+
+      const pendingStrong = document.querySelector(".estado-pendientes strong");
+      if (pendingStrong) {
+        pendingStrong.textContent = `${formatted} días`;
+      }
+
+      const donutLegendLines = document.querySelectorAll(".donut-legend p");
+      if (donutLegendLines[0]) {
+        donutLegendLines[0].textContent = `Utilizadas: ${used.toFixed(2)} días`;
+      }
+      if (donutLegendLines[1]) {
+        donutLegendLines[1].textContent = `Pendientes: ${formatted} días`;
+      }
+      if (donutLegendLines[2]) {
+        donutLegendLines[2].textContent = `Proporcionales: ${generated.toFixed(2)} días`;
+      }
+
+      const donut = document.querySelector(".donut-chart span");
+      if (donut) {
+        donut.innerHTML = `${generated.toFixed(2)}<br />días`;
+      }
+    }
+
+    function syncVacationUsedFromRange() {
+      if (!vacationUsedInput || !vacationFromInput || !vacationToInput) return;
+      if (!vacationFromInput.value || !vacationToInput.value) return;
+
+      const from = new Date(vacationFromInput.value);
+      const to = new Date(vacationToInput.value);
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return;
+
+      const diffMs = Math.abs(to - from);
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+      vacationUsedInput.value = days.toFixed(2);
+      updateVacationPendingPreview();
+    }
+
     tabs.forEach((tab) => {
       tab.addEventListener("click", function () {
         activateTab(this.dataset.target);
       });
     });
+
+    if (typeSelect) {
+      typeSelect.addEventListener("change", renderConcepts);
+      renderConcepts();
+    }
+
+    if (vacationUsedInput) {
+      vacationUsedInput.addEventListener("input", updateVacationPendingPreview);
+    }
+    if (vacationFromInput) {
+      vacationFromInput.addEventListener("change", syncVacationUsedFromRange);
+    }
+    if (vacationToInput) {
+      vacationToInput.addEventListener("change", syncVacationUsedFromRange);
+    }
+    updateVacationPendingPreview();
   })();
 </script>
 {% endblock %}

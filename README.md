@@ -20,11 +20,30 @@ Sistema web en Flask para gestionar asistencia, calcular sueldos y administrar n
 
 - Vista de liquidaciones por empleado con interfaz renovada.
 - Sección Nueva liquidación con resumen de cálculo y tipos de liquidación.
-- Cálculo de vacaciones automático por antigüedad y proporcional por rango de fechas.
+- Cálculo de liquidación basado en historial real del empleado (nómina cargada).
+- Salario pendiente prorrateado por fecha de salida.
+  - Si existe nómina del mismo mes de salida, usa los registros hasta esa fecha.
+  - Si no existe nómina en ese mes, estima solo el tramo transcurrido del mes de salida usando promedio diario del último mes registrado.
+- Aguinaldo proporcional calculado desde periodos históricos previos.
+- Vacaciones generadas/usadas/pendientes con persistencia en base de datos.
+- Estado de vacaciones mostrando periodos registrados (meses realmente cargados).
 - Base legal implementada según Código Laboral Paraguayo:
   - 1 a 5 años: 12 días.
   - Más de 5 a 10 años: 18 días.
   - Más de 10 años: 30 días.
+
+## Persistencia y Migración
+
+- Se guardan liquidaciones históricas por empleado en `liquidaciones`.
+- Se guardan promedios usados en liquidación en `promedios_laborales`.
+- Migración automática al arrancar para columnas nuevas de `employees`:
+  - `hire_date`
+  - `liquidation_type`
+  - `vacation_generated_days`
+  - `vacation_used_days`
+  - `vacation_pending_days`
+  - `vacation_used_from`
+  - `vacation_used_to`
 
 ## Interfaz y UX
 

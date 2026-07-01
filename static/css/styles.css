@@ -1005,6 +1005,77 @@ tbody tr:hover {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.liq-concepts-box {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.liq-concepts-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+
+.liq-concepts-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.liq-concepts-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.liq-concepts-label {
+  margin: 0 0 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.liq-concepts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.liq-concepts-list li {
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.vacation-state-copy {
+  margin-bottom: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
+.vacation-state-copy p {
+  margin: 0;
+}
+
+.vacation-range-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
 .liquidacion-table-wrap table tbody td:last-child,
 .liquidacion-table-wrap table tfoot td:last-child {
   text-align: right;
@@ -1061,6 +1132,10 @@ tbody tr:hover {
 .tipo-card.is-active {
   border-color: var(--primary);
   background: var(--primary-soft);
+}
+
+.tipo-card.is-active h4 {
+  color: var(--primary-dark);
 }
 
 .liquidacion-side-box {

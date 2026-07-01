@@ -20,6 +20,13 @@ class Employee(db.Model):
     id: int = db.Column(db.Integer, primary_key=True)
     nombre: str = db.Column(db.String(255), nullable=False, unique=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    hire_date: Optional[str] = db.Column(db.String(20), nullable=True)
+    liquidation_type: Optional[str] = db.Column(db.String(50), nullable=True)
+    vacation_generated_days: float = db.Column(db.Float, nullable=False, default=0.0)
+    vacation_used_days: float = db.Column(db.Float, nullable=False, default=0.0)
+    vacation_pending_days: float = db.Column(db.Float, nullable=False, default=0.0)
+    vacation_used_from: Optional[str] = db.Column(db.String(20), nullable=True)
+    vacation_used_to: Optional[str] = db.Column(db.String(20), nullable=True)
 
     payroll_records = db.relationship(
         "EmployeePayroll",
@@ -44,6 +51,20 @@ class Employee(db.Model):
 
     records = db.relationship(
         "EmployeeRecord",
+        backref="employee",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    liquidations = db.relationship(
+        "Liquidacion",
+        backref="employee",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    laboral_averages = db.relationship(
+        "PromedioLaboral",
         backref="employee",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -197,3 +218,36 @@ class EmployeeRecord(db.Model):
     retiro: float = db.Column(db.Float, nullable=False, default=0.0)
     sueldo_final: float = db.Column(db.Float, nullable=False, default=0.0)
     observaciones: Optional[str] = db.Column(db.String(255), nullable=True)
+
+
+class Liquidacion(db.Model):
+    """Cabecera histórica de liquidaciones por empleado."""
+
+    __tablename__ = "liquidaciones"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    empleado_id: int = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    tipo: str = db.Column(db.String(50), nullable=False)
+    fecha_salida: Optional[str] = db.Column(db.String(20), nullable=True)
+    salario_pendiente: float = db.Column(db.Float, nullable=False, default=0.0)
+    aguinaldo: float = db.Column(db.Float, nullable=False, default=0.0)
+    vacaciones: float = db.Column(db.Float, nullable=False, default=0.0)
+    preaviso: float = db.Column(db.Float, nullable=False, default=0.0)
+    indemnizacion: float = db.Column(db.Float, nullable=False, default=0.0)
+    total_liquidacion: float = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PromedioLaboral(db.Model):
+    """Promedio salarial usado para liquidaciones y vacaciones."""
+
+    __tablename__ = "promedios_laborales"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    empleado_id: int = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    periodo: str = db.Column(db.String(50), nullable=False)
+    total_salarios: float = db.Column(db.Float, nullable=False, default=0.0)
+    dias_trabajados: int = db.Column(db.Integer, nullable=False, default=0)
+    promedio_diario: float = db.Column(db.Float, nullable=False, default=0.0)
+    promedio_mensual: float = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

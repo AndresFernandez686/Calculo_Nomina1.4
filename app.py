@@ -13,7 +13,7 @@ import os
 import pickle
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional, cast
 
 import pandas as pd
@@ -42,9 +42,12 @@ from payroll.models import (
     EmployeeAttendance,
     EmployeePayroll,
     EmployeeRecord,
+    Liquidacion,
+    PromedioLaboral,
     db,
 )
 from payroll.models_liquidacion import obtener_mensaje_liquidacion
+from payroll.models_liquidacion import calcular_vacaciones_desde_historial
 from payroll.pdf_processor import (
     convertir_a_dataframe_estandar,  # noqa: F401  (import keeps API discoverable)
     detectar_horarios_ambiguos,
@@ -1039,7 +1042,315 @@ def ver_empleado(empleado_id):
     )
 
 
-@app.route("/empleado/<int:empleado_id>/liquidaciones")
+def _parse_fecha_form(valor):
+    texto = (valor or "").strip()
+    if not texto:
+        return None
+    try:
+        return datetime.strptime(texto, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _formatear_fecha_iso(valor: date | None) -> str:
+    return valor.isoformat() if valor else ""
+
+
+def _obtener_fecha_ingreso_empleado(empleado: Employee, registros: list[EmployeePayroll]) -> date | None:
+    if getattr(empleado, "hire_date", None):
+        fecha = _parse_fecha_form(empleado.hire_date)
+        if fecha:
+            return fecha
+
+    fechas = []
+    for registro in registros:
+        fecha = _parse_fecha_form(getattr(registro, "fecha", None))
+        if fecha:
+            fechas.append(fecha)
+
+    if not fechas:
+        return None
+
+    fecha_ingreso = min(fechas)
+    empleado.hire_date = fecha_ingreso.isoformat()
+    return fecha_ingreso
+
+
+def _obtener_ultimos_periodos(registros: list[EmployeePayroll], fecha_limite: date | None, cantidad: int = 6) -> list[dict]:
+    meses = _agrupar_registros_por_mes(registros)
+    resultado = []
+    for mes in meses:
+        ultimo_registro = mes["registros"][-1] if mes.get("registros") else None
+        fecha_mes = _parse_fecha_form(getattr(ultimo_registro, "fecha", None)) if ultimo_registro else None
+        if fecha_limite and fecha_mes and fecha_mes > fecha_limite:
+            continue
+        resultado.append(mes)
+        if len(resultado) >= cantidad:
+            break
+    return resultado
+
+
+def _calcular_salario_pendiente_liquidacion(
+    registros: list[EmployeePayroll],
+    fecha_salida: date | None,
+) -> dict:
+    if not registros or not fecha_salida:
+        return {
+            "dias": 0,
+            "horas": 0.0,
+            "valor_hora": VALOR_POR_HORA_DEFAULT,
+            "monto": 0.0,
+            "periodo": "Sin periodo",
+        }
+
+    periodo_registros = []
+    for registro in registros:
+        fecha = _parse_fecha_form(getattr(registro, "fecha", None))
+        if not fecha:
+            continue
+        if fecha.year == fecha_salida.year and fecha.month == fecha_salida.month and fecha <= fecha_salida:
+            periodo_registros.append(registro)
+
+    dias_periodo = max(int(fecha_salida.day), 1)
+    if not periodo_registros:
+        meses_historicos = _agrupar_registros_por_mes(registros)
+        if not meses_historicos:
+            return {
+                "dias": 0,
+                "horas": 0.0,
+                "valor_hora": VALOR_POR_HORA_DEFAULT,
+                "monto": 0.0,
+                "periodo": "Sin periodo",
+            }
+
+        ultimo_mes = meses_historicos[0]
+        periodo_registros = list(ultimo_mes.get("registros") or [])
+        if not periodo_registros:
+            return {
+                "dias": 0,
+                "horas": 0.0,
+                "valor_hora": VALOR_POR_HORA_DEFAULT,
+                "monto": 0.0,
+                "periodo": "Sin periodo",
+            }
+
+        fecha_ultimo = _parse_fecha_form(getattr(periodo_registros[-1], "fecha", None))
+        if fecha_ultimo:
+            dias_periodo = max((fecha_salida - date(fecha_salida.year, fecha_salida.month, 1)).days + 1, 1)
+
+        run_id = next((reg.run_id for reg in periodo_registros if reg.run_id is not None), None)
+        valor_hora = VALOR_POR_HORA_DEFAULT
+        if run_id is not None:
+            run = CalculationRun.query.get(int(run_id))
+            if run and float(run.valor_por_hora or 0) > 0:
+                valor_hora = float(run.valor_por_hora)
+
+        horas_normales_mes = sum(float(reg.horas_normales or 0) for reg in periodo_registros)
+        horas_especiales_mes = sum(float(reg.horas_especiales or 0) for reg in periodo_registros)
+        horas_total_mes = horas_normales_mes + horas_especiales_mes
+        monto_mes = sum(float(reg.sueldo_final or 0) for reg in periodo_registros)
+        dias_registrados_mes = max(len(periodo_registros), 1)
+
+        horas_promedio_dia = horas_total_mes / dias_registrados_mes
+        monto_promedio_dia = monto_mes / dias_registrados_mes
+
+        return {
+            "dias": dias_periodo,
+            "horas": round(horas_promedio_dia * dias_periodo, 2),
+            "valor_hora": round(valor_hora, 2),
+            "monto": round(monto_promedio_dia * dias_periodo, 2),
+            "periodo": f"{fecha_salida.year:04d}-{fecha_salida.month:02d}-01 al {fecha_salida.isoformat()}",
+        }
+
+    run_id = next((reg.run_id for reg in periodo_registros if reg.run_id is not None), None)
+    valor_hora = VALOR_POR_HORA_DEFAULT
+    if run_id is not None:
+        run = CalculationRun.query.get(int(run_id))
+        if run and float(run.valor_por_hora or 0) > 0:
+            valor_hora = float(run.valor_por_hora)
+
+    fecha_periodo = _parse_fecha_form(getattr(periodo_registros[0], "fecha", None))
+    fecha_periodo_texto = fecha_periodo.isoformat() if fecha_periodo else "Sin periodo"
+
+    horas_normales = sum(float(reg.horas_normales or 0) for reg in periodo_registros)
+    horas_especiales = sum(float(reg.horas_especiales or 0) for reg in periodo_registros)
+    horas_total = horas_normales + horas_especiales
+    monto = sum(float(reg.sueldo_final or 0) for reg in periodo_registros)
+    return {
+        "dias": min(len(periodo_registros), dias_periodo),
+        "horas": round(horas_total, 2),
+        "valor_hora": round(valor_hora, 2),
+        "monto": round(monto, 2),
+        "periodo": f"{fecha_periodo_texto} al {fecha_salida.isoformat()}",
+    }
+
+
+def _calcular_aguinaldo_proporcional(registros: list[EmployeePayroll], fecha_salida: date | None) -> dict:
+    periodos = _obtener_ultimos_periodos(registros, fecha_salida, cantidad=6)
+    total_salarios = 0.0
+    periodos_labels = []
+    for mes in periodos:
+        total_salarios += float(mes.get("total_sueldos") or 0)
+        periodos_labels.append(mes.get("mes_nombre", ""))
+
+    aguinaldo = round(total_salarios / 12, 2)
+    periodo_texto = " - ".join(reversed(periodos_labels)) if periodos_labels else "Sin periodo"
+    return {
+        "periodo": periodo_texto,
+        "total_salarios": round(total_salarios, 2),
+        "aguinaldo": aguinaldo,
+    }
+
+
+def _dias_anuales_por_antiguedad(anios_cumplidos: int) -> int:
+    if anios_cumplidos <= 5:
+        return 12
+    if anios_cumplidos <= 10:
+        return 18
+    return 30
+
+
+def _calcular_vacaciones_por_liquidacion(
+    empleado: Employee,
+    registros: list[EmployeePayroll],
+    fecha_salida: date | None,
+    vacaciones_usadas: float,
+) -> dict:
+    fecha_ingreso = _obtener_fecha_ingreso_empleado(empleado, registros)
+    if not fecha_ingreso or not fecha_salida:
+        return {
+            "fecha_ingreso": _formatear_fecha_iso(fecha_ingreso),
+            "dias_generados": 0.0,
+            "dias_usados": round(vacaciones_usadas, 2),
+            "dias_pendientes": 0.0,
+            "promedio_diario": 0.0,
+            "monto": 0.0,
+            "dias_antiguedad": 0,
+            "periodo_promedio": "Sin periodo",
+        }
+
+    dias_antiguedad = max((fecha_salida - fecha_ingreso).days, 0)
+    meses_periodo = _obtener_ultimos_periodos(registros, fecha_salida, cantidad=6)
+    total_salarios = sum(float(mes.get("total_sueldos") or 0) for mes in meses_periodo)
+    dias_trabajados = sum(int(mes.get("dias_trabajados") or 0) for mes in meses_periodo)
+    promedio_diario = round((total_salarios / dias_trabajados), 2) if dias_trabajados else 0.0
+    periodo_promedio = " - ".join(mes.get("mes_nombre", "") for mes in meses_periodo if mes.get("mes_nombre"))
+
+    anios_completos = dias_antiguedad // 365
+    dias_restantes = dias_antiguedad % 365
+    dias_generados = 0.0
+    for anio in range(1, anios_completos + 1):
+        dias_generados += _dias_anuales_por_antiguedad(anio)
+    if dias_restantes > 0:
+        dias_generados += (dias_restantes / 365) * _dias_anuales_por_antiguedad(anios_completos + 1)
+
+    dias_pendientes = round(max(dias_generados - vacaciones_usadas, 0.0), 2)
+    monto = round(dias_pendientes * promedio_diario, 2)
+    return {
+        "fecha_ingreso": _formatear_fecha_iso(fecha_ingreso),
+        "dias_generados": round(dias_generados, 2),
+        "dias_usados": round(vacaciones_usadas, 2),
+        "dias_pendientes": dias_pendientes,
+        "promedio_diario": promedio_diario,
+        "monto": monto,
+        "dias_antiguedad": dias_antiguedad,
+        "periodo_promedio": periodo_promedio or "Sin periodo",
+    }
+
+
+def _calcular_preaviso_e_indemnizacion(tipo_liquidacion: str, dias_antiguedad: int, promedio_diario: float) -> dict:
+    if tipo_liquidacion != "despido-sin-causa":
+        return {"preaviso": 0.0, "indemnizacion": 0.0, "preaviso_dias": 0, "indemnizacion_dias": 0}
+
+    anios = max(dias_antiguedad // 365, 1)
+    if dias_antiguedad < 365:
+        preaviso_dias = 30
+    elif dias_antiguedad <= 5 * 365:
+        preaviso_dias = 45
+    else:
+        preaviso_dias = 60
+
+    indemnizacion_dias = 15 * anios
+    return {
+        "preaviso": round(preaviso_dias * promedio_diario, 2),
+        "indemnizacion": round(indemnizacion_dias * promedio_diario, 2),
+        "preaviso_dias": preaviso_dias,
+        "indemnizacion_dias": indemnizacion_dias,
+    }
+
+
+def _dias_inclusive(fecha_inicio: date | None, fecha_fin: date | None) -> float:
+    if not fecha_inicio or not fecha_fin:
+        return 0.0
+    if fecha_fin < fecha_inicio:
+        fecha_inicio, fecha_fin = fecha_fin, fecha_inicio
+    return float((fecha_fin - fecha_inicio).days + 1)
+
+
+def _calcular_promedio_laboral(registros: list[EmployeePayroll], empleado_id: int) -> dict:
+    fechas = []
+    total_salarios = 0.0
+    dias_trabajados = 0
+
+    for registro in registros:
+      fecha_texto = getattr(registro, "fecha", "")
+      if fecha_texto:
+          fechas.append(str(fecha_texto))
+      total_salarios += float(getattr(registro, "sueldo_final", 0) or 0)
+      dias_trabajados += 1
+
+    if not dias_trabajados:
+        return {
+            "periodo": "Sin periodo",
+            "total_salarios": 0.0,
+            "dias_trabajados": 0,
+            "promedio_diario": 0.0,
+            "promedio_mensual": 0.0,
+        }
+
+    promedio_diario = round(total_salarios / dias_trabajados, 2)
+    promedio_mensual = round(promedio_diario * 30, 2)
+    periodo = f"{min(fechas)} a {max(fechas)}" if fechas else "Sin periodo"
+
+    return {
+        "periodo": periodo,
+        "total_salarios": round(total_salarios, 2),
+        "dias_trabajados": dias_trabajados,
+        "promedio_diario": promedio_diario,
+        "promedio_mensual": promedio_mensual,
+    }
+
+
+def _calcular_liquidacion_resumen(tipo_liquidacion: str, promedio: dict, vacaciones_pendientes: float) -> dict:
+    promedio_diario = float(promedio.get("promedio_diario") or 0.0)
+    promedio_mensual = float(promedio.get("promedio_mensual") or 0.0)
+
+    salario_pendiente = round(promedio_mensual, 2)
+    aguinaldo = round(float(promedio.get("total_salarios") or 0.0) / 12, 2)
+    vacaciones = round(vacaciones_pendientes * promedio_diario, 2)
+
+    if tipo_liquidacion == "despido-sin-causa":
+        preaviso = round(promedio_mensual, 2)
+        indemnizacion = round(promedio_mensual, 2)
+    elif tipo_liquidacion == "fin-de-contrato":
+        preaviso = 0.0
+        indemnizacion = 0.0
+    else:
+        preaviso = 0.0
+        indemnizacion = 0.0
+
+    total_liquidacion = round(salario_pendiente + aguinaldo + vacaciones + preaviso + indemnizacion, 2)
+    return {
+        "salario_pendiente": salario_pendiente,
+        "aguinaldo": aguinaldo,
+        "vacaciones": vacaciones,
+        "preaviso": preaviso,
+        "indemnizacion": indemnizacion,
+        "total_liquidacion": total_liquidacion,
+    }
+
+
+@app.route("/empleado/<int:empleado_id>/liquidaciones", methods=["GET", "POST"])
 def liquidaciones(empleado_id):
     """Muestra la vista de liquidaciones para un empleado."""
     empleado = db.session.get(Employee, empleado_id)
@@ -1053,15 +1364,181 @@ def liquidaciones(empleado_id):
     )
 
     historial_mensual = [{"fecha": r.fecha} for r in registros if getattr(r, "fecha", None)]
+    periodos_registrados = len(_agrupar_registros_por_mes_key(registros))
+    promedio_actual = _calcular_promedio_laboral(registros, empleado_id)
+    ultima_liquidacion = (
+        Liquidacion.query.filter_by(empleado_id=empleado_id)
+        .order_by(desc(Liquidacion.created_at))
+        .first()
+    )
+    ultima_fecha_salida = _parse_fecha_form(getattr(ultima_liquidacion, "fecha_salida", None)) if ultima_liquidacion else None
+    fecha_salida_default = ultima_fecha_salida or date.today()
     try:
-        mensaje = obtener_mensaje_liquidacion(historial_mensual=historial_mensual)
+        estado_vacaciones = calcular_vacaciones_desde_historial(historial_mensual=historial_mensual)
     except ValueError:
-        mensaje = "Sin datos suficientes para calcular vacaciones"
+        estado_vacaciones = {
+            "fecha_inicio": "",
+            "fecha_fin": "",
+            "dias_trabajados": 0,
+            "dias_vacaciones": 0.0,
+            "mensaje": "Sin datos suficientes para calcular vacaciones",
+        }
+
+    vacaciones_usadas = float(empleado.vacation_used_days or 0.0)
+    fecha_salida = fecha_salida_default
+    salario_pendiente_data = _calcular_salario_pendiente_liquidacion(registros, fecha_salida)
+    aguinaldo_data = _calcular_aguinaldo_proporcional(registros, fecha_salida)
+    vacaciones_data = _calcular_vacaciones_por_liquidacion(
+        empleado=empleado,
+        registros=registros,
+        fecha_salida=fecha_salida,
+        vacaciones_usadas=vacaciones_usadas,
+    )
+    preaviso_indemnizacion = _calcular_preaviso_e_indemnizacion(
+        empleado.liquidation_type or "renuncia-voluntaria",
+        vacaciones_data["dias_antiguedad"],
+        vacaciones_data["promedio_diario"],
+    )
+
+    vacaciones_generadas = float(vacaciones_data["dias_generados"] or estado_vacaciones.get("dias_vacaciones") or 0.0)
+    vacaciones_pendientes = float(vacaciones_data["dias_pendientes"] or 0.0)
+    monto_vacaciones_pendientes = float(vacaciones_data["monto"] or 0.0)
+    salario_pendiente = float(salario_pendiente_data["monto"] or 0.0)
+    aguinaldo = float(aguinaldo_data["aguinaldo"] or 0.0)
+    preaviso = float(preaviso_indemnizacion["preaviso"] or 0.0)
+    indemnizacion = float(preaviso_indemnizacion["indemnizacion"] or 0.0)
+    total_liquidacion = round(salario_pendiente + aguinaldo + monto_vacaciones_pendientes + preaviso + indemnizacion, 2)
+
+    if request.method == "POST":
+        tipo_liquidacion = (request.form.get("liq_tipo") or "renuncia-voluntaria").strip()
+        fecha_salida = _parse_fecha_form(request.form.get("liq_salida")) or fecha_salida_default
+
+        salario_pendiente_data = _calcular_salario_pendiente_liquidacion(registros, fecha_salida)
+        aguinaldo_data = _calcular_aguinaldo_proporcional(registros, fecha_salida)
+
+        vacaciones_usadas = float(request.form.get("vacaciones_usadas") or 0.0)
+        fecha_desde = _parse_fecha_form(request.form.get("vacaciones_desde"))
+        fecha_hasta = _parse_fecha_form(request.form.get("vacaciones_hasta"))
+        if vacaciones_usadas <= 0 and fecha_desde and fecha_hasta:
+            vacaciones_usadas = _dias_inclusive(fecha_desde, fecha_hasta)
+
+        vacaciones_data = _calcular_vacaciones_por_liquidacion(
+            empleado=empleado,
+            registros=registros,
+            fecha_salida=fecha_salida,
+            vacaciones_usadas=vacaciones_usadas,
+        )
+        preaviso_indemnizacion = _calcular_preaviso_e_indemnizacion(
+            tipo_liquidacion,
+            vacaciones_data["dias_antiguedad"],
+            vacaciones_data["promedio_diario"],
+        )
+
+        salario_pendiente = salario_pendiente_data["monto"]
+        aguinaldo = aguinaldo_data["aguinaldo"]
+        vacaciones = vacaciones_data["monto"]
+        preaviso = preaviso_indemnizacion["preaviso"]
+        indemnizacion = preaviso_indemnizacion["indemnizacion"]
+        total_liquidacion = round(salario_pendiente + aguinaldo + vacaciones + preaviso + indemnizacion, 2)
+
+        resumen = {
+            "salario_pendiente": salario_pendiente,
+            "aguinaldo": aguinaldo,
+            "vacaciones": vacaciones,
+            "preaviso": preaviso,
+            "indemnizacion": indemnizacion,
+            "total_liquidacion": total_liquidacion,
+        }
+
+        promedio = PromedioLaboral()
+        promedio.empleado_id = empleado.id
+        promedio.periodo = aguinaldo_data["periodo"] or promedio_actual["periodo"]
+        promedio.total_salarios = aguinaldo_data["total_salarios"] or promedio_actual["total_salarios"]
+        promedio.dias_trabajados = vacaciones_data["dias_antiguedad"] or promedio_actual["dias_trabajados"]
+        promedio.promedio_diario = vacaciones_data["promedio_diario"] or promedio_actual["promedio_diario"]
+        promedio.promedio_mensual = round((promedio.promedio_diario or 0) * 30, 2)
+
+        empleado.liquidation_type = tipo_liquidacion
+        empleado.vacation_generated_days = vacaciones_generadas
+        empleado.vacation_used_days = vacaciones_usadas
+        empleado.vacation_pending_days = vacaciones_pendientes
+        empleado.vacation_used_from = request.form.get("vacaciones_desde") or None
+        empleado.vacation_used_to = request.form.get("vacaciones_hasta") or None
+
+        liquidacion = Liquidacion()
+        liquidacion.empleado_id = empleado.id
+        liquidacion.tipo = tipo_liquidacion
+        liquidacion.fecha_salida = _formatear_fecha_iso(fecha_salida)
+        liquidacion.salario_pendiente = resumen["salario_pendiente"]
+        liquidacion.aguinaldo = resumen["aguinaldo"]
+        liquidacion.vacaciones = resumen["vacaciones"]
+        liquidacion.preaviso = resumen["preaviso"]
+        liquidacion.indemnizacion = resumen["indemnizacion"]
+        liquidacion.total_liquidacion = resumen["total_liquidacion"]
+        db.session.add(promedio)
+        db.session.add(liquidacion)
+        db.session.commit()
+
+        flash("La liquidación se guardó con las vacaciones actualizadas.", "success")
+        return redirect(url_for("liquidaciones", empleado_id=empleado_id))
+
+    ultimo_promedio = (
+        PromedioLaboral.query.filter_by(empleado_id=empleado_id)
+        .order_by(desc(PromedioLaboral.created_at))
+        .first()
+    )
+
+    detalle_vacaciones = (
+        f"Vacaciones generadas: {vacaciones_generadas:.2f} días · "
+        f"Vacaciones utilizadas: {vacaciones_usadas:.2f} días · "
+        f"Vacaciones pendientes: {vacaciones_pendientes:.2f} días"
+    )
+    detalle_salario_pendiente = (
+        f"{salario_pendiente_data['dias']} días / {salario_pendiente_data['horas']:.2f} hs × Gs. {salario_pendiente_data['valor_hora']:,.0f}"
+    )
+    detalle_aguinaldo = f"{aguinaldo_data['periodo']} ({len(_obtener_ultimos_periodos(registros, fecha_salida_default, 6))}/12)"
+    detalle_vacaciones = (
+        f"{detalle_vacaciones} · {vacaciones_data['dias_pendientes']:.2f} días × Gs. {vacaciones_data['promedio_diario']:,.0f}"
+    )
+    detalle_preaviso = (
+        f"{preaviso_indemnizacion['preaviso_dias']} días × Gs. {vacaciones_data['promedio_diario']:,.0f}"
+        if preaviso > 0
+        else "No aplica"
+    )
+    detalle_indemnizacion = (
+        f"{preaviso_indemnizacion['indemnizacion_dias']} días × Gs. {vacaciones_data['promedio_diario']:,.0f}"
+        if indemnizacion > 0
+        else "No aplica"
+    )
 
     return render_template(
         "liquidaciones.html",
         empleado=empleado,
-        mensaje=mensaje,
+        mensaje=estado_vacaciones["mensaje"],
+        detalle_vacaciones=detalle_vacaciones,
+        vacaciones_generadas=round(vacaciones_generadas, 2),
+        vacaciones_usadas=round(vacaciones_usadas, 2),
+        vacaciones_pendientes=round(vacaciones_pendientes, 2),
+        monto_vacaciones_pendientes=monto_vacaciones_pendientes,
+        vacaciones_desde=empleado.vacation_used_from or "",
+        vacaciones_hasta=empleado.vacation_used_to or "",
+        selected_liquidation_type=empleado.liquidation_type or "renuncia-voluntaria",
+        promedio_laboral=ultimo_promedio,
+        ultima_liquidacion=ultima_liquidacion,
+        periodos_registrados=periodos_registrados,
+        fecha_ingreso=vacaciones_data["fecha_ingreso"],
+        salario_pendiente=salario_pendiente,
+        aguinaldo=aguinaldo,
+        preaviso=preaviso,
+        indemnizacion=indemnizacion,
+        total_liquidacion=total_liquidacion,
+        fecha_salida_default=_formatear_fecha_iso(fecha_salida_default),
+        promedio_diario_vacaciones=vacaciones_data["promedio_diario"],
+        vacaciones_periodo_promedio=vacaciones_data["periodo_promedio"],
+        detalle_salario_pendiente=detalle_salario_pendiente,
+        detalle_aguinaldo=detalle_aguinaldo,
+        detalle_preaviso=detalle_preaviso,
+        detalle_indemnizacion=detalle_indemnizacion,
     )
 
 
@@ -1517,6 +1994,42 @@ def _ensure_missing_employee_columns():
         "calculation_runs",
         "total_bonificacion",
         "ALTER TABLE calculation_runs ADD COLUMN total_bonificacion FLOAT NOT NULL DEFAULT 0",
+    )
+
+    ensure_column(
+        "employees",
+        "hire_date",
+        "ALTER TABLE employees ADD COLUMN hire_date VARCHAR(20)",
+    )
+    ensure_column(
+        "employees",
+        "liquidation_type",
+        "ALTER TABLE employees ADD COLUMN liquidation_type VARCHAR(50)",
+    )
+    ensure_column(
+        "employees",
+        "vacation_generated_days",
+        "ALTER TABLE employees ADD COLUMN vacation_generated_days FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employees",
+        "vacation_used_days",
+        "ALTER TABLE employees ADD COLUMN vacation_used_days FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employees",
+        "vacation_pending_days",
+        "ALTER TABLE employees ADD COLUMN vacation_pending_days FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employees",
+        "vacation_used_from",
+        "ALTER TABLE employees ADD COLUMN vacation_used_from VARCHAR(20)",
+    )
+    ensure_column(
+        "employees",
+        "vacation_used_to",
+        "ALTER TABLE employees ADD COLUMN vacation_used_to VARCHAR(20)",
     )
 
     ensure_column(
