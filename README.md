@@ -2,7 +2,7 @@
 
 Sistema avanzado para el cálculo automático de sueldos basado en registros de entrada y salida de empleados.
 
-## 🆕 **NUEVA FUNCIONALIDAD v1.3: Gestión de Marcado Único**
+## 🆕 **NUEVA FUNCIONALIDAD v1.4: Gestión de Marcado Único**
 
 ### ⭐ **Problema Resuelto**
 Cuando un empleado marca **solo 1 vez** en el día (en lugar de entrada + salida), el sistema ahora permite al administrador decidir explícitamente si fue **entrada** o **salida** y completar el horario faltante.
@@ -111,14 +111,14 @@ Si hay horarios sospechosos (ej: entrada muy tarde):
 
 ## 🛠️ **Tecnologías Utilizadas**
 
-- **Frontend**: Streamlit + HTML/CSS personalizado
+- **Frontend**: Flask + HTML/CSS personalizado
 - **Backend**: Python 3.8+
 - **Procesamiento**: Pandas, OpenPyXL
 - **PDFs**: pdfplumber (opcional)
 - **UI/UX**: Componentes interactivos avanzados
 - IA para desarrollo de codigo y optimizacion
 
-## 📈 **Mejoras en v1.3**
+## 📈 **Mejoras en v1.4**
 
 - ✅ **Detección automática de marcado único**
 - ✅ **Panel administrativo intuitivo**
