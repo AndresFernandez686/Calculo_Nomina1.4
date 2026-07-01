@@ -1,4 +1,4 @@
-# 💰 Calculadora de Sueldos v1.3
+# 💰 Calculadora de Sueldos v1.4
 
 Sistema avanzado para el cálculo automático de sueldos basado en registros de entrada y salida de empleados.
 
