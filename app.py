@@ -13,6 +13,7 @@ import os
 import pickle
 import re
 import uuid
+import calendar
 from datetime import date, datetime, timedelta
 from typing import Optional, cast
 
@@ -291,7 +292,7 @@ def _agrupar_registros_por_mes(registros):
             meses[clave]["_run_ids_contados"].add(run_id)
 
     salida = []
-    for clave in sorted(meses.keys(), reverse=True):
+    for clave in sorted(meses.keys()):
         mes = meses[clave]
         if abs(mes["monto_feriados"]) < 0.015:
             mes["monto_feriados"] = 0.0
@@ -303,6 +304,31 @@ def _agrupar_registros_por_mes(registros):
         salida.append(mes)
 
     return salida
+
+
+def _agrupar_meses_por_anio(registros_por_mes):
+    """Agrupa meses por anio para separar visualmente el historial cuando aplica."""
+    if not registros_por_mes:
+        return [], False
+
+    meses_por_anio = {}
+    for mes in registros_por_mes:
+        year = mes.get("year")
+        if year is None:
+            continue
+        if year not in meses_por_anio:
+            meses_por_anio[year] = []
+        meses_por_anio[year].append(mes)
+
+    bloques = []
+    for year in sorted(meses_por_anio.keys(), reverse=True):
+        meses_ordenados = sorted(
+            meses_por_anio[year],
+            key=lambda item: (item.get("month") or 0),
+        )
+        bloques.append({"year": year, "meses": meses_ordenados})
+
+    return bloques, len(bloques) > 1
 
 
 def _filtrar_registros_por_mes(registros, year, month):
@@ -1033,12 +1059,15 @@ def ver_empleado(empleado_id):
         .all()
     )
     registros_por_mes = _agrupar_registros_por_mes(registros)
+    bloques_anuales, mostrar_separador_anual = _agrupar_meses_por_anio(registros_por_mes)
     
     return render_template(
         "employee_payroll.html",
         empleado=empleado,
         registros=registros,
         registros_por_mes=registros_por_mes,
+        bloques_anuales=bloques_anuales,
+        mostrar_separador_anual=mostrar_separador_anual,
     )
 
 
@@ -1077,17 +1106,23 @@ def _obtener_fecha_ingreso_empleado(empleado: Employee, registros: list[Employee
 
 
 def _obtener_ultimos_periodos(registros: list[EmployeePayroll], fecha_limite: date | None, cantidad: int = 6) -> list[dict]:
-    meses = _agrupar_registros_por_mes(registros)
-    resultado = []
+    meses = sorted(
+        _agrupar_registros_por_mes(registros),
+        key=lambda mes: (int(mes.get("year") or 0), int(mes.get("month") or 0)),
+    )
+    meses_filtrados = []
     for mes in meses:
-        ultimo_registro = mes["registros"][-1] if mes.get("registros") else None
-        fecha_mes = _parse_fecha_form(getattr(ultimo_registro, "fecha", None)) if ultimo_registro else None
-        if fecha_limite and fecha_mes and fecha_mes > fecha_limite:
+        year = int(mes.get("year") or 0)
+        month = int(mes.get("month") or 0)
+        if not year or not month:
             continue
-        resultado.append(mes)
-        if len(resultado) >= cantidad:
-            break
-    return resultado
+        if fecha_limite and (year, month) > (fecha_limite.year, fecha_limite.month):
+            continue
+        meses_filtrados.append(mes)
+
+    if cantidad > 0 and len(meses_filtrados) > cantidad:
+        return meses_filtrados[-cantidad:]
+    return meses_filtrados
 
 
 def _calcular_salario_pendiente_liquidacion(
@@ -1194,7 +1229,7 @@ def _calcular_aguinaldo_proporcional(registros: list[EmployeePayroll], fecha_sal
         periodos_labels.append(mes.get("mes_nombre", ""))
 
     aguinaldo = round(total_salarios / 12, 2)
-    periodo_texto = " - ".join(reversed(periodos_labels)) if periodos_labels else "Sin periodo"
+    periodo_texto = " - ".join(periodos_labels) if periodos_labels else "Sin periodo"
     return {
         "periodo": periodo_texto,
         "total_salarios": round(total_salarios, 2),
@@ -1287,6 +1322,68 @@ def _dias_inclusive(fecha_inicio: date | None, fecha_fin: date | None) -> float:
     return float((fecha_fin - fecha_inicio).days + 1)
 
 
+def _calcular_timeline_antiguedad(
+    fecha_ingreso: date | None,
+    fecha_salida: date | None,
+    meses_aguinaldo: int,
+) -> dict:
+    if not fecha_ingreso or not fecha_salida:
+        return {
+            "fecha_ingreso": "N/D",
+            "fecha_salida": "N/D",
+            "periodos_completos": 0,
+            "periodo_proporcional": 0.0,
+            "meses_aguinaldo": max(0, min(int(meses_aguinaldo or 0), 12)),
+            "aguinaldo_porcentaje": 0.0,
+            "donut_gradient": "conic-gradient(#3b82f6 0 0%, #334155 0 100%)",
+        }
+
+    if fecha_salida < fecha_ingreso:
+        fecha_ingreso, fecha_salida = fecha_salida, fecha_ingreso
+
+    periodos_completos = 0
+    periodo_proporcional = 0.0
+
+    cursor = date(fecha_ingreso.year, fecha_ingreso.month, 1)
+    limite = date(fecha_salida.year, fecha_salida.month, 1)
+
+    while cursor <= limite:
+        dias_mes = calendar.monthrange(cursor.year, cursor.month)[1]
+        inicio_mes = cursor
+        fin_mes = date(cursor.year, cursor.month, dias_mes)
+
+        tramo_inicio = max(fecha_ingreso, inicio_mes)
+        tramo_fin = min(fecha_salida, fin_mes)
+
+        if tramo_inicio <= tramo_fin:
+            if tramo_inicio == inicio_mes and tramo_fin == fin_mes:
+                periodos_completos += 1
+            else:
+                dias_trabajados_mes = (tramo_fin - tramo_inicio).days + 1
+                periodo_proporcional += dias_trabajados_mes / dias_mes
+
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+
+    meses_aguinaldo = max(0, min(int(meses_aguinaldo or 0), 12))
+    aguinaldo_porcentaje = round((meses_aguinaldo / 12) * 100, 2)
+    donut_gradient = (
+        f"conic-gradient(#3b82f6 0 {aguinaldo_porcentaje:.2f}%, #334155 {aguinaldo_porcentaje:.2f}% 100%)"
+    )
+
+    return {
+        "fecha_ingreso": _formatear_fecha_iso(fecha_ingreso),
+        "fecha_salida": fecha_salida.strftime("%d/%m/%Y"),
+        "periodos_completos": periodos_completos,
+        "periodo_proporcional": round(periodo_proporcional, 2),
+        "meses_aguinaldo": meses_aguinaldo,
+        "aguinaldo_porcentaje": aguinaldo_porcentaje,
+        "donut_gradient": donut_gradient,
+    }
+
+
 def _calcular_promedio_laboral(registros: list[EmployeePayroll], empleado_id: int) -> dict:
     fechas = []
     total_salarios = 0.0
@@ -1350,6 +1447,53 @@ def _calcular_liquidacion_resumen(tipo_liquidacion: str, promedio: dict, vacacio
     }
 
 
+def _label_tipo_liquidacion(tipo: str | None) -> str:
+    labels = {
+        "renuncia-voluntaria": "Renuncia voluntaria",
+        "despido-sin-causa": "Despido sin causa",
+        "despido-con-causa": "Despido con causa",
+        "fin-de-contrato": "Fin de contrato",
+    }
+    return labels.get((tipo or "").strip(), "Tipo no definido")
+
+
+def _detalle_calculo_liquidacion_historial(liq: Liquidacion) -> dict:
+    salario_pendiente = float(liq.salario_pendiente or 0)
+    aguinaldo = float(liq.aguinaldo or 0)
+    vacaciones = float(liq.vacaciones or 0)
+    preaviso = float(liq.preaviso or 0)
+    indemnizacion = float(liq.indemnizacion or 0)
+    total = float(liq.total_liquidacion or 0)
+
+    return {
+        "salario_pendiente": (
+            f"Salario pendiente: Gs. {salario_pendiente:,.0f}. "
+            "Corresponde al tramo trabajado hasta la fecha de salida seleccionada."
+        ),
+        "aguinaldo": (
+            f"Aguinaldo proporcional: Gs. {aguinaldo:,.0f}. "
+            "Se calcula prorrateando los periodos salariales acumulados sobre 12 meses."
+        ),
+        "vacaciones": (
+            f"Vacaciones no gozadas: Gs. {vacaciones:,.0f}. "
+            "Resultado de días pendientes por promedio diario vigente en la liquidación."
+        ),
+        "preaviso": (
+            f"Preaviso: Gs. {preaviso:,.0f}. "
+            + (
+                "Aplica según tipo de liquidación y antigüedad." if preaviso > 0 else "No aplica para este caso."
+            )
+        ),
+        "indemnizacion": (
+            f"Indemnización: Gs. {indemnizacion:,.0f}. "
+            + (
+                "Aplica cuando corresponde legalmente por tipo de desvinculación." if indemnizacion > 0 else "No aplica para este caso."
+            )
+        ),
+        "total": f"Total liquidación: Gs. {total:,.0f}. Suma final de todos los conceptos aplicables.",
+    }
+
+
 @app.route("/empleado/<int:empleado_id>/liquidaciones", methods=["GET", "POST"])
 def liquidaciones(empleado_id):
     """Muestra la vista de liquidaciones para un empleado."""
@@ -1366,6 +1510,35 @@ def liquidaciones(empleado_id):
     historial_mensual = [{"fecha": r.fecha} for r in registros if getattr(r, "fecha", None)]
     periodos_registrados = len(_agrupar_registros_por_mes_key(registros))
     promedio_actual = _calcular_promedio_laboral(registros, empleado_id)
+    active_tab = (request.args.get("tab") or "nueva").strip().lower()
+    if active_tab not in {"nueva", "historial", "exportar"}:
+        active_tab = "nueva"
+
+    historial_liquidaciones_raw = (
+        Liquidacion.query.filter_by(empleado_id=empleado_id)
+        .order_by(desc(Liquidacion.created_at))
+        .all()
+    )
+    historial_liquidaciones = []
+    for item in historial_liquidaciones_raw:
+        fecha_salida_item = _parse_fecha_form(getattr(item, "fecha_salida", None))
+        detalle_texto = _detalle_calculo_liquidacion_historial(item)
+        historial_liquidaciones.append(
+            {
+                "id": item.id,
+                "tipo": _label_tipo_liquidacion(item.tipo),
+                "fecha_registro": item.created_at.strftime("%d/%m/%Y %H:%M") if item.created_at else "N/D",
+                "fecha_salida": fecha_salida_item.strftime("%d/%m/%Y") if fecha_salida_item else "N/D",
+                "salario_pendiente": float(item.salario_pendiente or 0),
+                "aguinaldo": float(item.aguinaldo or 0),
+                "vacaciones": float(item.vacaciones or 0),
+                "preaviso": float(item.preaviso or 0),
+                "indemnizacion": float(item.indemnizacion or 0),
+                "total_liquidacion": float(item.total_liquidacion or 0),
+                "detalle_texto": detalle_texto,
+            }
+        )
+
     ultima_liquidacion = (
         Liquidacion.query.filter_by(empleado_id=empleado_id)
         .order_by(desc(Liquidacion.created_at))
@@ -1480,7 +1653,7 @@ def liquidaciones(empleado_id):
         db.session.commit()
 
         flash("La liquidación se guardó con las vacaciones actualizadas.", "success")
-        return redirect(url_for("liquidaciones", empleado_id=empleado_id))
+        return redirect(url_for("liquidaciones", empleado_id=empleado_id, tab="historial"))
 
     ultimo_promedio = (
         PromedioLaboral.query.filter_by(empleado_id=empleado_id)
@@ -1496,7 +1669,8 @@ def liquidaciones(empleado_id):
     detalle_salario_pendiente = (
         f"{salario_pendiente_data['dias']} días / {salario_pendiente_data['horas']:.2f} hs × Gs. {salario_pendiente_data['valor_hora']:,.0f}"
     )
-    detalle_aguinaldo = f"{aguinaldo_data['periodo']} ({len(_obtener_ultimos_periodos(registros, fecha_salida_default, 6))}/12)"
+    meses_aguinaldo = len(_obtener_ultimos_periodos(registros, fecha_salida_default, 12))
+    detalle_aguinaldo = f"{aguinaldo_data['periodo']} ({meses_aguinaldo}/12)"
     detalle_vacaciones = (
         f"{detalle_vacaciones} · {vacaciones_data['dias_pendientes']:.2f} días × Gs. {vacaciones_data['promedio_diario']:,.0f}"
     )
@@ -1510,6 +1684,84 @@ def liquidaciones(empleado_id):
         if indemnizacion > 0
         else "No aplica"
     )
+    timeline_antiguedad = _calcular_timeline_antiguedad(
+        _parse_fecha_form(vacaciones_data.get("fecha_ingreso")),
+        fecha_salida_default,
+        meses_aguinaldo,
+    )
+
+    composicion_base = [
+        {
+            "label": "Salario pendiente",
+            "amount": float(salario_pendiente or 0),
+            "color": "#4f83ff",
+            "dot_class": "dot-blue",
+        },
+        {
+            "label": "Aguinaldo proporcional",
+            "amount": float(aguinaldo or 0),
+            "color": "#22c55e",
+            "dot_class": "dot-green",
+        },
+        {
+            "label": "Vacaciones no gozadas",
+            "amount": float(monto_vacaciones_pendientes or 0),
+            "color": "#facc15",
+            "dot_class": "dot-yellow",
+        },
+    ]
+    if float(indemnizacion or 0) > 0:
+        composicion_base.append(
+            {
+                "label": "Indemnización",
+                "amount": float(indemnizacion or 0),
+                "color": "#fb923c",
+                "dot_class": "dot-orange",
+            }
+        )
+    if float(preaviso or 0) > 0:
+        composicion_base.append(
+            {
+                "label": "Preaviso",
+                "amount": float(preaviso or 0),
+                "color": "#ef4444",
+                "dot_class": "dot-red",
+            }
+        )
+
+    composicion_liquidacion = []
+    composicion_chart_gradient = "conic-gradient(#64748b 0 100%)"
+    composicion_dominante_label = "Sin datos"
+    composicion_dominante_porcentaje = 0.0
+    total_composicion = float(total_liquidacion or 0)
+    if total_composicion > 0:
+        acumulado = 0.0
+        segmentos = []
+        for concepto in composicion_base:
+            porcentaje = round((concepto["amount"] / total_composicion) * 100, 2)
+            composicion_liquidacion.append(
+                {
+                    **concepto,
+                    "percentage": porcentaje,
+                }
+            )
+            inicio = acumulado
+            acumulado = min(acumulado + porcentaje, 100.0)
+            segmentos.append(f"{concepto['color']} {inicio:.2f}% {acumulado:.2f}%")
+
+        if segmentos:
+            composicion_chart_gradient = f"conic-gradient({', '.join(segmentos)})"
+        dominante = max(composicion_liquidacion, key=lambda item: float(item.get("percentage") or 0))
+        composicion_dominante_label = str(dominante.get("label") or "Sin datos")
+        composicion_dominante_porcentaje = float(dominante.get("percentage") or 0)
+    else:
+        for concepto in composicion_base:
+            composicion_liquidacion.append(
+                {
+                    **concepto,
+                    "percentage": 0.0,
+                }
+            )
 
     return render_template(
         "liquidaciones.html",
@@ -1539,6 +1791,13 @@ def liquidaciones(empleado_id):
         detalle_aguinaldo=detalle_aguinaldo,
         detalle_preaviso=detalle_preaviso,
         detalle_indemnizacion=detalle_indemnizacion,
+        composicion_liquidacion=composicion_liquidacion,
+        composicion_chart_gradient=composicion_chart_gradient,
+        composicion_dominante_label=composicion_dominante_label,
+        composicion_dominante_porcentaje=composicion_dominante_porcentaje,
+        timeline_antiguedad=timeline_antiguedad,
+        active_tab=active_tab,
+        historial_liquidaciones=historial_liquidaciones,
     )
 
 

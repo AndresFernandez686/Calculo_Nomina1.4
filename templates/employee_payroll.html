@@ -1,5 +1,196 @@
 {% extends "base.html" %}
 
+{% macro render_month_card(mes, panel_id, empleado_id) %}
+  <div class="card month-card">
+    <div class="card-head card-head-accordion">
+      <button
+        type="button"
+        class="accordion-toggle"
+        aria-expanded="false"
+        aria-controls="mes-panel-{{ panel_id }}"
+      >
+        <span class="accordion-main">
+          <span class="accordion-title">{{ mes.mes_nombre }}</span>
+        </span>
+        <span class="accordion-icon" aria-hidden="true">+</span>
+      </button>
+    </div>
+    <div id="mes-panel-{{ panel_id }}" class="accordion-panel" hidden>
+      <div class="payroll-details">
+        <div class="payroll-metrics-grid">
+          <article class="payroll-metric-card">
+            <p>Días Trabajados</p>
+            <strong>{{ mes.dias_trabajados }}</strong>
+            <small>del mes</small>
+          </article>
+          <article class="payroll-metric-card">
+            <p>Total Horas Normales</p>
+            <strong>{{ "%.2f"|format(mes.total_horas_normales) }}</strong>
+            <small>Promedio: {{ "%.2f"|format((mes.total_horas_normales / mes.dias_trabajados) if mes.dias_trabajados else 0) }} h/día</small>
+          </article>
+          <article class="payroll-metric-card">
+            <p>Total Horas Especiales</p>
+            <strong>{{ "%.2f"|format(mes.total_horas_especiales) }}</strong>
+            <small>Promedio: {{ "%.2f"|format((mes.total_horas_especiales / mes.dias_trabajados) if mes.dias_trabajados else 0) }} h/día</small>
+          </article>
+          <article class="payroll-metric-card payroll-metric-card-accent">
+            <p>Sueldo Total</p>
+            <strong>${{ "{:,.0f}".format(mes.total_sueldos) }}</strong>
+            <small>Bruto del mes</small>
+          </article>
+        </div>
+
+        <h3 class="section-title">Desglose del salario bruto</h3>
+        <div class="table-wrap payroll-breakdown-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th style="text-align: right;">Horas</th>
+                <th style="text-align: right;">Valor por Hora</th>
+                <th style="text-align: right;">Total (Gs.)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="payroll-dot payroll-dot-normal"></span>Horas normales</td>
+                <td style="text-align: right;">{{ mes.total_horas_normales | hhmm }}</td>
+                <td style="text-align: right;">${{ "{:,.0f}".format(((mes.monto_horas_normales or 0) / mes.total_horas_normales) if mes.total_horas_normales else 0) }}</td>
+                <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_horas_normales or 0) }}</td>
+              </tr>
+              <tr>
+                <td><span class="payroll-dot payroll-dot-special"></span>Horas especiales (+30%)</td>
+                <td style="text-align: right;">{{ mes.total_horas_especiales | hhmm }}</td>
+                <td style="text-align: right;">${{ "{:,.0f}".format(((mes.monto_horas_especiales or 0) / mes.total_horas_especiales) if mes.total_horas_especiales else 0) }}</td>
+                <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_horas_especiales or 0) }}</td>
+              </tr>
+              <tr>
+                <td><span class="payroll-dot payroll-dot-feriado"></span>Feriados (extra x2)</td>
+                <td style="text-align: right;">{{ "0:00" if not mes.monto_feriados else "--" }}</td>
+                <td style="text-align: right;">${{ "{:,.0f}".format((((mes.monto_horas_normales or 0) / mes.total_horas_normales) * 2) if mes.total_horas_normales else 0) }}</td>
+                <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_feriados or 0) }}</td>
+              </tr>
+              <tr>
+                <td><span class="payroll-dot payroll-dot-bono"></span>Bonificación</td>
+                <td style="text-align: right;">—</td>
+                <td style="text-align: right;">—</td>
+                <td style="text-align: right;">${{ "{:,.2f}".format(mes.bonificacion or 0) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3">Salario bruto</td>
+                <td style="text-align: right;" class="liquidacion-total">${{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <h3 class="section-title">Resumen IPS</h3>
+        <div class="payroll-ips-grid">
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                <tr>
+                  <td>Salario bruto total</td>
+                  <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</strong></td>
+                </tr>
+                <tr>
+                  <td>Descuento del empleado (9%)</td>
+                  <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_descuento_ips or 0) }}</strong></td>
+                </tr>
+                <tr>
+                  <td>Aporte empleador (16.5%)</td>
+                  <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_aporte_empleador_ips or 0) }}</strong></td>
+                </tr>
+                <tr>
+                  <td>Total abonar IPS</td>
+                  <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_ips or 0) }}</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <aside class="payroll-net-card">
+            <p>Salario neto del empleado</p>
+            <strong>${{ "{:,.2f}".format(mes.total_salario_neto_ips or 0) }}</strong>
+            <small>Monto que recibe el empleado</small>
+          </aside>
+        </div>
+
+        <h3 class="section-title">Detalle diario de asistencia</h3>
+        <div class="table-wrap">
+          <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Entrada</th>
+              <th>Salida</th>
+              <th style="text-align: center;">Feriado</th>
+              <th style="text-align: right;">Horas Normales</th>
+              <th style="text-align: right;">Horas Especiales</th>
+              <th style="text-align: right;">Desc. Inv.</th>
+              <th style="text-align: right;">Desc. Caja</th>
+              <th style="text-align: right;">Retiro</th>
+              <th style="text-align: right;">Sueldo Final</th>
+            </tr>
+          </thead>
+          <tbody id="days-tbody-{{ panel_id }}" class="js-days-body" data-limit="5">
+            {% for registro in mes.registros %}
+              <tr>
+                <td>{{ registro.fecha }}</td>
+                <td>{{ registro.entrada or "-" }}</td>
+                <td>{{ registro.salida or "-" }}</td>
+                <td style="text-align: center;">
+                  <span class="badge{% if registro.feriado == 'S' %} badge-feriado{% endif %}">
+                    {{ registro.feriado or "N" }}
+                  </span>
+                </td>
+                <td style="text-align: right;">{{ "%.2f"|format(registro.horas_normales) }}</td>
+                <td style="text-align: right;">{{ "%.2f"|format(registro.horas_especiales) }}</td>
+                <td style="text-align: right;">
+                  <strong class="money">{% if registro.descuento_inventario %}${{ "{:,.0f}".format(registro.descuento_inventario) }}{% else %}-{% endif %}</strong>
+                </td>
+                <td style="text-align: right;">
+                  <strong class="money">{% if registro.descuento_caja %}${{ "{:,.0f}".format(registro.descuento_caja) }}{% else %}-{% endif %}</strong>
+                </td>
+                <td style="text-align: right;">
+                  <strong class="money">{% if registro.retiro %}${{ "{:,.0f}".format(registro.retiro) }}{% else %}-{% endif %}</strong>
+                </td>
+                <td style="text-align: right;">
+                  <strong class="money">${{ "{:,.0f}".format(registro.sueldo_final) }}</strong>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+
+        <div class="month-actions month-actions-detail">
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm js-toggle-days"
+            data-target="days-tbody-{{ panel_id }}"
+          >
+            Ver todos los días del mes
+          </button>
+          <a
+            class="btn btn-secondary btn-sm"
+            href="{{ url_for('descargar_mes', empleado_id=empleado_id, year=mes.year, month=mes.month, format='xlsx') }}"
+          >
+            Descargar Excel
+          </a>
+          <a
+            class="btn btn-secondary btn-sm"
+            href="{{ url_for('descargar_mes', empleado_id=empleado_id, year=mes.year, month=mes.month, format='pdf') }}"
+          >
+            Descargar PDF
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endmacro %}
+
 {% block content %}
 <section class="hero">
   <h1>Nómina de {{ empleado.nombre }}</h1>
@@ -24,196 +215,25 @@
 
 <div class="card-body">
   {% if registros_por_mes %}
-    {% for mes in registros_por_mes %}
-      <div class="card month-card">
-          <div class="card-head card-head-accordion">
-            <button
-              type="button"
-              class="accordion-toggle"
-              aria-expanded="false"
-              aria-controls="mes-panel-{{ loop.index }}"
-            >
-              <span class="accordion-main">
-                <span class="accordion-title">{{ mes.mes_nombre }}</span>
-              </span>
-              <span class="accordion-icon" aria-hidden="true">+</span>
-            </button>
-          </div>
-          <div id="mes-panel-{{ loop.index }}" class="accordion-panel" hidden>
-            <div class="payroll-details">
-              <div class="payroll-metrics-grid">
-                <article class="payroll-metric-card">
-                  <p>Días Trabajados</p>
-                  <strong>{{ mes.dias_trabajados }}</strong>
-                  <small>del mes</small>
-                </article>
-                <article class="payroll-metric-card">
-                  <p>Total Horas Normales</p>
-                  <strong>{{ "%.2f"|format(mes.total_horas_normales) }}</strong>
-                  <small>Promedio: {{ "%.2f"|format((mes.total_horas_normales / mes.dias_trabajados) if mes.dias_trabajados else 0) }} h/día</small>
-                </article>
-                <article class="payroll-metric-card">
-                  <p>Total Horas Especiales</p>
-                  <strong>{{ "%.2f"|format(mes.total_horas_especiales) }}</strong>
-                  <small>Promedio: {{ "%.2f"|format((mes.total_horas_especiales / mes.dias_trabajados) if mes.dias_trabajados else 0) }} h/día</small>
-                </article>
-                <article class="payroll-metric-card payroll-metric-card-accent">
-                  <p>Sueldo Total</p>
-                  <strong>${{ "{:,.0f}".format(mes.total_sueldos) }}</strong>
-                  <small>Bruto del mes</small>
-                </article>
-              </div>
-
-              <h3 class="section-title">Desglose del salario bruto</h3>
-              <div class="table-wrap payroll-breakdown-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Concepto</th>
-                      <th style="text-align: right;">Horas</th>
-                      <th style="text-align: right;">Valor por Hora</th>
-                      <th style="text-align: right;">Total (Gs.)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td><span class="payroll-dot payroll-dot-normal"></span>Horas normales</td>
-                      <td style="text-align: right;">{{ mes.total_horas_normales | hhmm }}</td>
-                      <td style="text-align: right;">${{ "{:,.0f}".format(((mes.monto_horas_normales or 0) / mes.total_horas_normales) if mes.total_horas_normales else 0) }}</td>
-                      <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_horas_normales or 0) }}</td>
-                    </tr>
-                    <tr>
-                      <td><span class="payroll-dot payroll-dot-special"></span>Horas especiales (+30%)</td>
-                      <td style="text-align: right;">{{ mes.total_horas_especiales | hhmm }}</td>
-                      <td style="text-align: right;">${{ "{:,.0f}".format(((mes.monto_horas_especiales or 0) / mes.total_horas_especiales) if mes.total_horas_especiales else 0) }}</td>
-                      <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_horas_especiales or 0) }}</td>
-                    </tr>
-                    <tr>
-                      <td><span class="payroll-dot payroll-dot-feriado"></span>Feriados (extra x2)</td>
-                      <td style="text-align: right;">{{ "0:00" if not mes.monto_feriados else "--" }}</td>
-                      <td style="text-align: right;">${{ "{:,.0f}".format((((mes.monto_horas_normales or 0) / mes.total_horas_normales) * 2) if mes.total_horas_normales else 0) }}</td>
-                      <td style="text-align: right;">${{ "{:,.2f}".format(mes.monto_feriados or 0) }}</td>
-                    </tr>
-                    <tr>
-                      <td><span class="payroll-dot payroll-dot-bono"></span>Bonificación</td>
-                      <td style="text-align: right;">—</td>
-                      <td style="text-align: right;">—</td>
-                      <td style="text-align: right;">${{ "{:,.2f}".format(mes.bonificacion or 0) }}</td>
-                    </tr>
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colspan="3">Salario bruto</td>
-                      <td style="text-align: right;" class="liquidacion-total">${{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              <h3 class="section-title">Resumen IPS</h3>
-              <div class="payroll-ips-grid">
-                <div class="table-wrap">
-                  <table>
-                    <tbody>
-                      <tr>
-                        <td>Salario bruto total</td>
-                        <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_salario_bruto or 0) }}</strong></td>
-                      </tr>
-                      <tr>
-                        <td>Descuento del empleado (9%)</td>
-                        <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_descuento_ips or 0) }}</strong></td>
-                      </tr>
-                      <tr>
-                        <td>Aporte empleador (16.5%)</td>
-                        <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_aporte_empleador_ips or 0) }}</strong></td>
-                      </tr>
-                      <tr>
-                        <td>Total abonar IPS</td>
-                        <td style="text-align: right;"><strong>Gs {{ "{:,.2f}".format(mes.total_ips or 0) }}</strong></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <aside class="payroll-net-card">
-                  <p>Salario neto del empleado</p>
-                  <strong>${{ "{:,.2f}".format(mes.total_salario_neto_ips or 0) }}</strong>
-                  <small>Monto que recibe el empleado</small>
-                </aside>
-              </div>
-
-              <h3 class="section-title">Detalle diario de asistencia</h3>
-              <div class="table-wrap">
-                <table>
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Entrada</th>
-                    <th>Salida</th>
-                    <th style="text-align: center;">Feriado</th>
-                    <th style="text-align: right;">Horas Normales</th>
-                    <th style="text-align: right;">Horas Especiales</th>
-                    <th style="text-align: right;">Desc. Inv.</th>
-                    <th style="text-align: right;">Desc. Caja</th>
-                    <th style="text-align: right;">Retiro</th>
-                    <th style="text-align: right;">Sueldo Final</th>
-                  </tr>
-                </thead>
-                <tbody id="days-tbody-{{ loop.index }}" class="js-days-body" data-limit="5">
-                  {% for registro in mes.registros %}
-                    <tr>
-                      <td>{{ registro.fecha }}</td>
-                      <td>{{ registro.entrada or "-" }}</td>
-                      <td>{{ registro.salida or "-" }}</td>
-                      <td style="text-align: center;">
-                        <span class="badge{% if registro.feriado == 'S' %} badge-feriado{% endif %}">
-                          {{ registro.feriado or "N" }}
-                        </span>
-                      </td>
-                      <td style="text-align: right;">{{ "%.2f"|format(registro.horas_normales) }}</td>
-                      <td style="text-align: right;">{{ "%.2f"|format(registro.horas_especiales) }}</td>
-                      <td style="text-align: right;">
-                        <strong class="money">{% if registro.descuento_inventario %}${{ "{:,.0f}".format(registro.descuento_inventario) }}{% else %}-{% endif %}</strong>
-                      </td>
-                      <td style="text-align: right;">
-                        <strong class="money">{% if registro.descuento_caja %}${{ "{:,.0f}".format(registro.descuento_caja) }}{% else %}-{% endif %}</strong>
-                      </td>
-                      <td style="text-align: right;">
-                        <strong class="money">{% if registro.retiro %}${{ "{:,.0f}".format(registro.retiro) }}{% else %}-{% endif %}</strong>
-                      </td>
-                      <td style="text-align: right;">
-                        <strong class="money">${{ "{:,.0f}".format(registro.sueldo_final) }}</strong>
-                      </td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-              </div>
-
-              <div class="month-actions month-actions-detail">
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm js-toggle-days"
-                  data-target="days-tbody-{{ loop.index }}"
-                >
-                  Ver todos los días del mes
-                </button>
-                <a
-                  class="btn btn-secondary btn-sm"
-                  href="{{ url_for('descargar_mes', empleado_id=empleado.id, year=mes.year, month=mes.month, format='xlsx') }}"
-                >
-                  Descargar Excel
-                </a>
-                <a
-                  class="btn btn-secondary btn-sm"
-                  href="{{ url_for('descargar_mes', empleado_id=empleado.id, year=mes.year, month=mes.month, format='pdf') }}"
-                >
-                  Descargar PDF
-                </a>
-              </div>
+    {% if mostrar_separador_anual %}
+      <div class="year-sections">
+        {% for bloque in bloques_anuales %}
+          <section class="year-block">
+            <div class="year-block-head">
+              <span class="year-chip">{{ bloque.year }}</span>
+              <span class="year-meta">Meses registrados: {{ bloque.meses | length }}</span>
             </div>
-          </div>
+            {% for mes in bloque.meses %}
+              {{ render_month_card(mes, 'y' ~ bloque.year ~ 'm' ~ mes.month, empleado.id) }}
+            {% endfor %}
+          </section>
+        {% endfor %}
       </div>
-    {% endfor %}
+    {% else %}
+      {% for mes in registros_por_mes %}
+        {{ render_month_card(mes, 'm' ~ loop.index, empleado.id) }}
+      {% endfor %}
+    {% endif %}
   {% else %}
     <p class="empty">No hay registros de nómina para este empleado.</p>
   {% endif %}

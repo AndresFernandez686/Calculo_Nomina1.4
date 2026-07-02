@@ -8,6 +8,17 @@
       name="description"
       content="Sistema profesional de cálculo de sueldos con soporte para Excel y PDF, feriados, horas especiales y descuentos."
     />
+    <script>
+      (function () {
+        var storedTheme = localStorage.getItem("theme");
+        if (storedTheme === "dark" || storedTheme === "light") {
+          document.documentElement.setAttribute("data-theme", storedTheme);
+          return;
+        }
+        var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+      })();
+    </script>
     <link
       rel="preconnect"
       href="https://fonts.googleapis.com"
@@ -34,9 +45,16 @@
             <small>Gestión de horas y liquidaciones</small>
           </span>
         </a>
-        <nav>
+        <nav class="topbar-nav">
           <a class="topbar-link" href="{{ url_for('index') }}">Inicio</a>
           <a class="topbar-link" href="{{ url_for('plantilla') }}">Plantilla Excel</a>
+          <div class="theme-toggle" role="group" aria-label="Cambiar tema">
+            <span class="theme-toggle-label">Modo Oscuro</span>
+            <label class="theme-switch" for="theme-toggle-input">
+              <input type="checkbox" id="theme-toggle-input" aria-label="Activar modo oscuro" />
+              <span class="theme-slider" aria-hidden="true"></span>
+            </label>
+          </div>
         </nav>
       </div>
     </header>
@@ -59,6 +77,22 @@
       Calculadora de Sueldos &middot; Horario laboral 10:30&ndash;22:00 &middot; Horas
       especiales 20:00&ndash;22:00 (+30%) &middot; Feriados x2
     </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var toggle = document.getElementById("theme-toggle-input");
+        if (!toggle) return;
+
+        var currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+        toggle.checked = currentTheme === "dark";
+
+        toggle.addEventListener("change", function () {
+          var nextTheme = this.checked ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", nextTheme);
+          localStorage.setItem("theme", nextTheme);
+        });
+      });
+    </script>
 
     {% block scripts %}{% endblock %}
   </body>

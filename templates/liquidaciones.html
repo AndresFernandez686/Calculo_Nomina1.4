@@ -22,17 +22,76 @@
     </div>
     <div class="card-body">
       <div class="liquidaciones-tabs" role="tablist" aria-label="Secciones de liquidación">
-        <button class="liquidacion-tab" type="button" role="tab" aria-selected="false" data-target="historial">Historial</button>
-        <button class="liquidacion-tab is-active" type="button" role="tab" aria-selected="true" data-target="nueva">Nueva liquidación</button>
-        <button class="liquidacion-tab" type="button" role="tab" aria-selected="false" data-target="exportar">Exportar PDF</button>
+        <button class="liquidacion-tab{% if active_tab == 'nueva' %} is-active{% endif %}" type="button" role="tab" aria-selected="{{ 'true' if active_tab == 'nueva' else 'false' }}" data-target="nueva">Nueva liquidación</button>
+        <button class="liquidacion-tab{% if active_tab == 'historial' %} is-active{% endif %}" type="button" role="tab" aria-selected="{{ 'true' if active_tab == 'historial' else 'false' }}" data-target="historial">Historial</button>
+        <button class="liquidacion-tab{% if active_tab == 'exportar' %} is-active{% endif %}" type="button" role="tab" aria-selected="{{ 'true' if active_tab == 'exportar' else 'false' }}" data-target="exportar">Exportar PDF</button>
       </div>
 
-      <section id="historial" class="liquidacion-pane" hidden>
+      <section id="historial" class="liquidacion-pane" {% if active_tab != 'historial' %}hidden{% endif %}>
         <h3>Historial</h3>
-        <p class="muted">Próximamente aquí se mostrará el historial completo de liquidaciones del empleado.</p>
+        {% if historial_liquidaciones %}
+          <div class="table-wrap liquidacion-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Registro</th>
+                  <th>Salida</th>
+                  <th>Tipo</th>
+                  <th style="text-align: right;">Salario Pend.</th>
+                  <th style="text-align: right;">Aguinaldo</th>
+                  <th style="text-align: right;">Vacaciones</th>
+                  <th style="text-align: right;">Preaviso</th>
+                  <th style="text-align: right;">Indemnización</th>
+                  <th style="text-align: right;">Total</th>
+                  <th style="text-align: center;">Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for liq in historial_liquidaciones %}
+                  <tr>
+                    <td>{{ liq.fecha_registro }}</td>
+                    <td>{{ liq.fecha_salida }}</td>
+                    <td>{{ liq.tipo }}</td>
+                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.salario_pendiente) }}</td>
+                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.aguinaldo) }}</td>
+                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.vacaciones) }}</td>
+                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.preaviso) }}</td>
+                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.indemnizacion) }}</td>
+                    <td style="text-align: right;"><strong>Gs. {{ "{:,.0f}".format(liq.total_liquidacion) }}</strong></td>
+                    <td style="text-align: center;">
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-sm js-liq-detail-toggle"
+                        data-target="liq-detail-{{ liq.id }}"
+                        aria-expanded="false"
+                        aria-controls="liq-detail-{{ liq.id }}"
+                      >
+                        Ver detalle
+                      </button>
+                    </td>
+                  </tr>
+                  <tr id="liq-detail-{{ liq.id }}" class="liq-detail-row" hidden>
+                    <td colspan="10">
+                      <div class="liq-detail-content">
+                        <p>{{ liq.detalle_texto.salario_pendiente }}</p>
+                        <p>{{ liq.detalle_texto.aguinaldo }}</p>
+                        <p>{{ liq.detalle_texto.vacaciones }}</p>
+                        <p>{{ liq.detalle_texto.preaviso }}</p>
+                        <p>{{ liq.detalle_texto.indemnizacion }}</p>
+                        <p><strong>{{ liq.detalle_texto.total }}</strong></p>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted">Todavía no hay liquidaciones generadas para este empleado.</p>
+        {% endif %}
       </section>
 
-      <section id="nueva" class="liquidacion-pane is-active">
+      <section id="nueva" class="liquidacion-pane{% if active_tab == 'nueva' %} is-active{% endif %}" {% if active_tab != 'nueva' %}hidden{% endif %}>
         <div class="liquidacion-form-grid">
           <div class="field">
             <label class="field-label" for="liq_empleado">Empleado</label>
@@ -124,7 +183,7 @@
         </div>
       </section>
 
-      <section id="exportar" class="liquidacion-pane" hidden>
+      <section id="exportar" class="liquidacion-pane" {% if active_tab != 'exportar' %}hidden{% endif %}>
         <h3>Exportar PDF</h3>
         <p class="muted">Próximamente aquí se habilitará la exportación de liquidaciones a PDF.</p>
       </section>
@@ -183,14 +242,18 @@
 
     <section class="card liquidacion-side-card">
       <div class="card-body">
-        <h3>Distribución de vacaciones</h3>
+        <h3>Composición de la liquidación (%)</h3>
         <div class="donut-wrap">
-          <div class="donut-chart" aria-hidden="true"><span>{{ vacaciones_generadas|round(2) }}<br />días</span></div>
+          <div class="donut-chart" aria-hidden="true" style="background: {{ composicion_chart_gradient }};"><span>{{ "%.1f"|format(composicion_dominante_porcentaje or 0) }}%<br />{{ composicion_dominante_label }}</span></div>
           <div class="donut-legend">
-            <p><span class="dot dot-blue"></span>Utilizadas: {{ vacaciones_usadas|round(2) }} días</p>
-            <p><span class="dot dot-yellow"></span>Pendientes: {{ vacaciones_pendientes|round(2) }} días</p>
-            <p><span class="dot dot-gray"></span>Promedio diario: Gs. {{ "{:,.0f}".format(promedio_diario_vacaciones or 0) }}</p>
+            {% for concepto in composicion_liquidacion %}
+              <p><span class="dot {{ concepto.dot_class }}"></span>{{ concepto.label }}: {{ "%.2f"|format(concepto.percentage) }}%</p>
+            {% endfor %}
           </div>
+        </div>
+        <div class="liquidacion-total-highlight">
+          <p>Total a pagar</p>
+          <strong>Gs. {{ "{:,.0f}".format(total_liquidacion or 0) }}</strong>
         </div>
       </div>
     </section>
@@ -222,13 +285,19 @@
 
   <section class="card">
     <div class="card-body">
-      <h3>Historial de liquidaciones</h3>
-      <ul class="liq-history-list">
-        <li><span>05/03/2026</span><span>Renuncia voluntaria</span><strong>2,350,000</strong></li>
-        <li><span>15/12/2025</span><span>Despido sin causa</span><strong>3,825,000</strong></li>
-        <li><span>30/09/2025</span><span>Fin de contrato</span><strong>2,120,000</strong></li>
-      </ul>
-      <a href="#" class="liq-history-link">Ver historial completo</a>
+      <h3>Línea de tiempo de antigüedad y derechos</h3>
+      <div class="seniority-wrap">
+        <div class="donut-chart donut-chart-timeline" aria-hidden="true" style="background: {{ timeline_antiguedad.donut_gradient }};">
+          <span>{{ "%.2f"|format(timeline_antiguedad.aguinaldo_porcentaje or 0) }}%<br />devengado</span>
+        </div>
+        <div class="seniority-legend">
+          <p><span class="dot dot-gray"></span>Fecha de ingreso: {{ timeline_antiguedad.fecha_ingreso }}</p>
+          <p><span class="dot dot-gray"></span>Fecha de salida: {{ timeline_antiguedad.fecha_salida }}</p>
+          <p><span class="dot dot-green"></span>Períodos trabajados completos: {{ timeline_antiguedad.periodos_completos }}</p>
+          <p><span class="dot dot-yellow"></span>Período proporcional en curso: {{ "%.2f"|format(timeline_antiguedad.periodo_proporcional or 0) }} mes{{ 'es' if (timeline_antiguedad.periodo_proporcional or 0) != 1 else '' }}</p>
+          <p><span class="dot dot-blue"></span>Aguinaldo devengado: {{ timeline_antiguedad.meses_aguinaldo }}/12</p>
+        </div>
+      </div>
     </div>
   </section>
   <input type="hidden" id="vacation_generated_hidden" value="{{ vacaciones_generadas|round(2) }}" />
@@ -238,6 +307,7 @@
 {% block scripts %}
 <script>
   (function () {
+    const initialTab = "{{ active_tab }}";
     const tabs = document.querySelectorAll(".liquidacion-tab");
     const panes = document.querySelectorAll(".liquidacion-pane");
     const typeSelect = document.getElementById("liq_tipo");
@@ -248,7 +318,7 @@
     const vacationFromInput = document.getElementById("vacaciones_desde");
     const vacationToInput = document.getElementById("vacaciones_hasta");
     const vacationGeneratedHidden = document.getElementById("vacation_generated_hidden");
-    const vacationPendingFields = document.querySelectorAll(".estado-pendientes strong, .donut-legend p:nth-child(2)");
+    const detailToggles = document.querySelectorAll(".js-liq-detail-toggle");
     const conceptRows = {
       preaviso: document.querySelector('[data-concept-row="preaviso"]'),
       indemnizacion: document.querySelector('[data-concept-row="indemnizacion"]'),
@@ -369,22 +439,6 @@
       if (pendingStrong) {
         pendingStrong.textContent = `${formatted} días`;
       }
-
-      const donutLegendLines = document.querySelectorAll(".donut-legend p");
-      if (donutLegendLines[0]) {
-        donutLegendLines[0].textContent = `Utilizadas: ${used.toFixed(2)} días`;
-      }
-      if (donutLegendLines[1]) {
-        donutLegendLines[1].textContent = `Pendientes: ${formatted} días`;
-      }
-      if (donutLegendLines[2]) {
-        donutLegendLines[2].textContent = `Proporcionales: ${generated.toFixed(2)} días`;
-      }
-
-      const donut = document.querySelector(".donut-chart span");
-      if (donut) {
-        donut.innerHTML = `${generated.toFixed(2)}<br />días`;
-      }
     }
 
     function syncVacationUsedFromRange() {
@@ -406,6 +460,23 @@
         activateTab(this.dataset.target);
       });
     });
+
+    detailToggles.forEach((button) => {
+      button.addEventListener("click", function () {
+        const targetId = this.dataset.target;
+        const row = document.getElementById(targetId);
+        if (!row) return;
+
+        const isOpen = this.getAttribute("aria-expanded") === "true";
+        row.hidden = isOpen;
+        this.setAttribute("aria-expanded", isOpen ? "false" : "true");
+        this.textContent = isOpen ? "Ver detalle" : "Ocultar detalle";
+      });
+    });
+
+    if (initialTab) {
+      activateTab(initialTab);
+    }
 
     if (typeSelect) {
       typeSelect.addEventListener("change", renderConcepts);
