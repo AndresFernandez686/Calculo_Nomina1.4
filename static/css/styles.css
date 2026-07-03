@@ -85,7 +85,7 @@ a {
 }
 
 .topbar-inner {
-  max-width: 1120px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 0.9rem 1.5rem;
   display: flex;
@@ -221,7 +221,7 @@ a {
 }
 
 .container {
-  max-width: 1120px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
 }
@@ -469,6 +469,87 @@ select:focus {
 
 .btn-primary:hover {
   background: var(--primary-dark);
+}
+
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.btn-loading::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btn-spin 0.7s linear infinite;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Loading overlay ──────────────────────────────────────────── */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.loading-overlay.is-active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.loading-card {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 2.25rem 2.75rem;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 240px;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: overlay-spin 0.8s linear infinite;
+}
+
+@keyframes overlay-spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.loading-subtitle {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .btn-block {
@@ -1106,7 +1187,7 @@ tbody tr:hover {
 
 @media (min-width: 960px) {
   .liquidaciones-dashboard {
-    grid-template-columns: 1.8fr 1fr;
+    grid-template-columns: 2.2fr 1fr;
     grid-template-areas:
       "main side"
       "types history";
@@ -1265,8 +1346,57 @@ tbody tr:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.liquidacion-table-wrap td {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.detalle-cell-multiline {
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.detalle-cell-multiline strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.detalle-cell-multiline em {
+  color: var(--text-muted);
+  opacity: 0.7;
+  font-style: normal;
+}
+
+.liquidacion-table-wrap td:first-child {
+  white-space: nowrap;
+  min-width: 140px;
+}
+
+.liquidacion-table-wrap td:last-child {
+  white-space: nowrap;
+  min-width: 110px;
+}
+
 .liquidacion-monto {
   font-weight: 600;
+}
+
+.fila-alerta-aguinaldo td {
+  padding: 0 !important;
+  border: none !important;
+}
+
+.alerta-meses-incompletos {
+  background: #fff8e1;
+  border-left: 4px solid #f59e0b;
+  color: #78350f;
+  font-size: 0.82rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.25rem 0 0.5rem;
+  line-height: 1.5;
 }
 
 .liquidacion-total {
@@ -1286,6 +1416,87 @@ tbody tr:hover {
   gap: 0.75rem;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+/* ─── Toggle: último sueldo pagado ─────────────────────────── */
+.sueldo-pagado-box {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.sueldo-pagado-label {
+  margin: 0 0 0.65rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.sueldo-pagado-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+@media (max-width: 600px) {
+  .sueldo-pagado-options { grid-template-columns: 1fr; }
+}
+
+.sueldo-pagado-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.75rem 0.9rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--surface);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.sueldo-pagado-opt input[type="radio"] {
+  display: none;
+}
+
+.sueldo-pagado-opt.is-selected,
+.sueldo-pagado-opt:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.sueldo-pagado-opt strong {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.sueldo-pagado-opt small {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.sueldo-opt-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.sueldo-pagado-opt.is-selected .sueldo-opt-icon,
+.sueldo-pagado-opt:has(input:checked) .sueldo-opt-icon {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
 
 .tipos-grid {
@@ -1357,6 +1568,86 @@ tbody tr:hover {
   border-radius: var(--radius-sm);
   padding: 0.75rem;
   background: var(--surface-2);
+}
+
+.estado-total-vac {
+  background: var(--success-soft);
+  border-color: #bbf7d0;
+}
+
+:root[data-theme="dark"] .estado-total-vac {
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.estado-total-vac strong {
+  font-size: 1.25rem;
+  color: var(--success);
+}
+
+/* ─── Sección promedio salarial ─────────────────────────────── */
+.promedio-section {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.85rem;
+}
+
+.promedio-section-title {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.promedio-mes-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.84rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.promedio-mes-row:last-of-type {
+  border-bottom: none;
+}
+
+.promedio-resultados {
+  margin-top: 0.6rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.promedio-resultado-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.83rem;
+  color: var(--text-muted);
+}
+
+.promedio-resultado-row strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.promedio-resultado-diario {
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.promedio-resultado-diario strong {
+  color: var(--primary);
+  font-size: 0.95rem;
 }
 
 .donut-wrap {
@@ -1536,4 +1827,453 @@ tbody tr:hover {
 
 .liq-detail-content p strong {
   color: var(--text);
+}
+
+/* ─── Historial v2 ──────────────────────────────────────────────────── */
+.historial-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.historial-head h3 { margin: 0 0 0.2rem; }
+
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-wrap svg {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-input {
+  padding: 0.45rem 0.75rem 0.45rem 2rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--surface);
+  color: var(--text);
+  width: 210px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.badge-tipo {
+  display: inline-block;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-tipo-renuncia-voluntaria { background: #dbeafe; color: #1d4ed8; }
+.badge-tipo-despido-sin-causa   { background: #ffedd5; color: #c2410c; }
+.badge-tipo-despido-con-causa   { background: #fee2e2; color: #b91c1c; }
+.badge-tipo-fin-de-contrato     { background: #f3f4f6; color: #4b5563; }
+
+.badge-estado {
+  display: inline-block;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #dcfce7;
+  color: #15803d;
+  white-space: nowrap;
+}
+
+.btn-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: var(--text-muted);
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.btn-chevron:hover { color: var(--text); }
+
+.chevron-icon {
+  transition: transform 0.2s ease;
+}
+
+.chevron-icon.is-open {
+  transform: rotate(90deg);
+}
+
+.historial-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.liq-detail-v2 {
+  display: grid;
+  grid-template-columns: 1fr 310px;
+  gap: 1.5rem;
+  padding: 1.25rem 1rem 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .liq-detail-v2 { grid-template-columns: 1fr; }
+}
+
+.liq-detail-v2-left h4,
+.liq-detail-v2-right h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.liq-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+
+.liq-mini-table th {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  letter-spacing: 0.04em;
+  text-align: left;
+}
+
+.liq-mini-table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.liq-mini-total td {
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  padding-top: 0.65rem;
+}
+
+.liq-resumen-final {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.resumen-final-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.resumen-final-line:last-of-type { border-bottom: none; }
+
+.resumen-final-total {
+  padding-top: 0.6rem;
+  margin-top: 0.15rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
+  border-top: 2px solid var(--border);
+  border-bottom: none !important;
+}
+
+.resumen-final-info {
+  margin-top: 0.85rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  color: #1e40af;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.resumen-final-info span { font-weight: 700; }
+.resumen-final-info p { 
+  margin: 0; 
+  font-size: 0.75rem;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.liq-pdf-btn {
+  width: 100%;
+  margin-top: 0.85rem;
+  font-size: 0.83rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.liq-detalles-adicionales {
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+  font-size: 0.83rem;
+}
+
+.liq-detalles-adicionales strong {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.liq-detalles-adicionales ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.historial-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0 0;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.83rem;
+}
+
+.pagination-btns {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.btn-page {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.btn-page:hover:not(:disabled) { background: var(--surface-2); }
+.btn-page:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-page-active { background: var(--primary) !important; color: #fff !important; border-color: var(--primary) !important; }
+
+/* ─── Historial Salarial ──────────────────────────────────────── */
+.hs-layout {
+  display: grid;
+  gap: 1.25rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+
+@media (min-width: 900px) {
+  .hs-layout {
+    grid-template-columns: 1fr 360px;
+  }
+}
+
+.hs-valor-actual {
+  background: var(--primary-soft);
+  border: 1px solid rgba(59,130,246,.25);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.hs-valor-num {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin-top: 0.15rem;
+}
+
+.hs-timeline {
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.hs-timeline::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.hs-entry {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+.hs-entry:last-child {
+  margin-bottom: 0;
+}
+
+.hs-entry-dot {
+  position: absolute;
+  left: -1.5rem;
+  top: 0.35rem;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid var(--surface);
+  z-index: 1;
+}
+
+.hs-entry-active .hs-entry-dot {
+  background: var(--primary);
+}
+
+.hs-entry-body {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+}
+
+.hs-entry-active .hs-entry-body {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.hs-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.hs-entry-monto {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.hs-badge-motivo {
+  display: inline-block;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.hs-badge-vigente {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--success);
+}
+
+.hs-entry-meta {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.hs-entry-obs {
+  font-size: 0.82rem;
+  color: var(--text);
+  margin: 0.35rem 0 0;
+  font-style: italic;
+}
+
+.hs-entry-footer {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0.4rem 0 0;
+}
+
+.hs-nota-legal {
+  margin-top: 1.25rem;
+  background: var(--info-soft);
+  border: 1px solid rgba(3,105,161,.2);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.78rem;
+  color: var(--info);
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.hs-nota-legal svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+textarea {
+  width: 100%;
+  padding: 0.62rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.15s;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }

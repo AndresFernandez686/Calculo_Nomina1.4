@@ -43,6 +43,7 @@ from payroll.models import (
     EmployeeAttendance,
     EmployeePayroll,
     EmployeeRecord,
+    HistorialSalarios,
     Liquidacion,
     PromedioLaboral,
     db,
@@ -194,6 +195,15 @@ MESES_ES = [
 ]
 
 
+def _mes_es(month: int) -> str:
+    """Nombre del mes en español (1–12).
+
+    Envuelve el acceso a ``MESES_ES`` para evitar el falso positivo de Pylance
+    con Python 3.14 donde ``int`` no se reconoce como ``SupportsIndex``.
+    """
+    return MESES_ES[month - 1]  # type: ignore[index]
+
+
 def _agrupar_registros_por_mes(registros):
     run_ids = {int(r.run_id) for r in registros if getattr(r, "run_id", None)}
     runs_by_id = {}
@@ -215,7 +225,7 @@ def _agrupar_registros_por_mes(registros):
             meses[clave] = {
                 "year": fecha_dt.year,
                 "month": fecha_dt.month,
-                "mes_nombre": f"{MESES_ES[fecha_dt.month - 1]} {fecha_dt.year}",
+                "mes_nombre": f"{_mes_es(fecha_dt.month)} {fecha_dt.year}",
                 "registros": [],
                 "dias_trabajados": 0,
                 "total_horas_normales": 0.0,
@@ -390,7 +400,7 @@ def _month_label_from_key(month_key: str) -> str:
         year_str, month_str = month_key.split("-", 1)
         year = int(year_str)
         month = int(month_str)
-        return f"{MESES_ES[month - 1]} {year}"
+        return f"{_mes_es(month)} {year}"
     except (ValueError, IndexError):
         return month_key
 
@@ -655,10 +665,10 @@ def _hhmm_to_decimal(valor):
     if not texto or texto.lower() in {"nan", "nat", "none"}:
         return 0.0
     if ":" in texto:
-        partes = texto.split(":", 1)
+        h_str, m_str = texto.split(":", 1)
         try:
-            horas = float(partes[0])
-            minutos = float(partes[1])
+            horas = float(h_str)
+            minutos = float(m_str)
             return horas + minutos / 60.0
         except ValueError:
             return 0.0
@@ -801,9 +811,9 @@ def _empleado_coincide(nombre_extraido: str, empleado: Employee) -> bool:
     tokens_empleado = nombre_empleado.split()
 
     if len(tokens_extraido) == 1 and tokens_empleado:
-        return tokens_extraido[0] == tokens_empleado[0]
+        return next(iter(tokens_extraido)) == next(iter(tokens_empleado))
     if len(tokens_empleado) == 1 and tokens_extraido:
-        return tokens_empleado[0] == tokens_extraido[0]
+        return next(iter(tokens_empleado)) == next(iter(tokens_extraido))
 
     return _tokens_consecutivos(tokens_extraido, tokens_empleado) or _tokens_consecutivos(
         tokens_empleado,
@@ -925,6 +935,7 @@ def _calcular_y_guardar(df, config, employee: Employee):
         payroll.sueldo_final = float(fila["Sueldo Final"] or 0)
         payroll.observaciones = fila.get("Observaciones", "")
         payroll.run_id = run.id
+        payroll.valor_hora_utilizado = config["valor_por_hora"]
         db.session.add(payroll)
 
     attendance = EmployeeAttendance()
@@ -1046,6 +1057,76 @@ def api_validar_horas():
     }
 
 
+@app.route("/empleado/<int:empleado_id>/historial-salarial", methods=["GET", "POST"])
+def historial_salarial(empleado_id: int):
+    """Muestra y gestiona el historial de cambios de valor por hora."""
+    empleado = db.session.get(Employee, empleado_id)
+    if not empleado:
+        abort(404)
+
+    if request.method == "POST":
+        fecha_inicio = (request.form.get("fecha_inicio") or "").strip()
+        try:
+            valor_hora = float(request.form.get("valor_hora") or 0)
+        except ValueError:
+            valor_hora = 0.0
+        motivo_cambio = (request.form.get("motivo_cambio") or "Ingreso").strip()
+        observaciones = (request.form.get("observaciones") or "").strip() or None
+        usuario = (request.form.get("usuario") or "").strip() or None
+
+        if not fecha_inicio or valor_hora <= 0:
+            flash("Fecha de inicio y valor por hora son obligatorios.", "error")
+        else:
+            # Cerrar el registro vigente anterior
+            registro_vigente = (
+                HistorialSalarios.query
+                .filter(
+                    text("empleado_id = :eid AND fecha_fin IS NULL")
+                    .bindparams(eid=empleado_id)
+                )
+                .order_by(desc(HistorialSalarios.fecha_inicio))
+                .first()
+            )
+            if registro_vigente and registro_vigente.fecha_inicio < fecha_inicio:
+                try:
+                    fi = date.fromisoformat(fecha_inicio)
+                    registro_vigente.fecha_fin = (fi - timedelta(days=1)).isoformat()
+                except ValueError:
+                    pass
+
+            nuevo = HistorialSalarios()  # type: ignore[call-arg]
+            nuevo.empleado_id = empleado_id
+            nuevo.fecha_inicio = fecha_inicio
+            nuevo.fecha_fin = None
+            nuevo.valor_hora = valor_hora
+            nuevo.motivo_cambio = motivo_cambio
+            nuevo.observaciones = observaciones
+            nuevo.usuario = usuario
+            db.session.add(nuevo)
+            db.session.commit()
+            flash(
+                f"Nuevo valor por hora Gs. {valor_hora:,.0f} registrado desde {fecha_inicio}.",
+                "success",
+            )
+        return redirect(url_for("historial_salarial", empleado_id=empleado_id))
+
+    historial = (
+        HistorialSalarios.query
+        .filter_by(empleado_id=empleado_id)
+        .order_by(desc(HistorialSalarios.fecha_inicio))
+        .all()
+    )
+    valor_actual = _obtener_valor_hora_vigente(empleado_id)
+    return render_template(
+        "historial_salarial.html",
+        empleado=empleado,
+        historial=historial,
+        motivos=HistorialSalarios.MOTIVOS,
+        valor_actual=valor_actual,
+        hoy=date.today().isoformat(),
+    )
+
+
 @app.route("/empleado/<int:empleado_id>")
 def ver_empleado(empleado_id):
     """Muestra la nómina de un empleado."""
@@ -1083,6 +1164,38 @@ def _parse_fecha_form(valor):
 
 def _formatear_fecha_iso(valor: date | None) -> str:
     return valor.isoformat() if valor else ""
+
+
+def _fmt_hhmm(h: float) -> str:
+    """Convierte horas decimales a formato HH:MM (ej. 14.90 -> '14:54')."""
+    hrs = int(h)
+    mins = int(round((h - hrs) * 60))
+    return f"{hrs}:{mins:02d}"
+
+
+def _obtener_valor_hora_vigente(empleado_id: int, fecha: date | None = None) -> float:
+    """Devuelve el valor por hora vigente del historial salarial para un empleado.
+
+    Busca el registro en ``historial_salarios`` donde:
+    ``fecha_inicio <= fecha`` y ``(fecha_fin IS NULL OR fecha_fin >= fecha)``.
+    Si no existe historial registrado, devuelve el valor por defecto global.
+    """
+    if fecha is None:
+        fecha = date.today()
+    fecha_str = fecha.isoformat()
+    historial = (
+        HistorialSalarios.query
+        .filter(
+            text(
+                "empleado_id = :eid "
+                "AND fecha_inicio <= :fs "
+                "AND (fecha_fin IS NULL OR fecha_fin >= :fs)"
+            ).bindparams(eid=empleado_id, fs=fecha_str)
+        )
+        .order_by(desc(HistorialSalarios.fecha_inicio))
+        .first()
+    )
+    return float(historial.valor_hora) if historial else VALOR_POR_HORA_DEFAULT
 
 
 def _obtener_fecha_ingreso_empleado(empleado: Employee, registros: list[EmployeePayroll]) -> date | None:
@@ -1128,15 +1241,17 @@ def _obtener_ultimos_periodos(registros: list[EmployeePayroll], fecha_limite: da
 def _calcular_salario_pendiente_liquidacion(
     registros: list[EmployeePayroll],
     fecha_salida: date | None,
+    ultimo_sueldo_pagado: bool = False,
 ) -> dict:
+    """Calcula el salario pendiente con desglose auditable de horas."""
+    _SIN_DATOS: dict = {
+        "dias": 0, "horas": 0.0, "horas_normales": 0.0, "horas_especiales": 0.0, "horas_feriado": 0.0,
+        "valor_hora": VALOR_POR_HORA_DEFAULT, "monto": 0.0, "periodo": "Sin periodo",
+        "fecha_inicio": "", "fecha_fin": fecha_salida.strftime("%d/%m/%Y") if fecha_salida else "",
+        "modo": "sin_datos",
+    }
     if not registros or not fecha_salida:
-        return {
-            "dias": 0,
-            "horas": 0.0,
-            "valor_hora": VALOR_POR_HORA_DEFAULT,
-            "monto": 0.0,
-            "periodo": "Sin periodo",
-        }
+        return _SIN_DATOS
 
     periodo_registros = []
     for registro in registros:
@@ -1150,52 +1265,72 @@ def _calcular_salario_pendiente_liquidacion(
     if not periodo_registros:
         meses_historicos = _agrupar_registros_por_mes(registros)
         if not meses_historicos:
-            return {
-                "dias": 0,
-                "horas": 0.0,
-                "valor_hora": VALOR_POR_HORA_DEFAULT,
-                "monto": 0.0,
-                "periodo": "Sin periodo",
-            }
+            return _SIN_DATOS
 
-        ultimo_mes = meses_historicos[0]
-        periodo_registros = list(ultimo_mes.get("registros") or [])
-        if not periodo_registros:
-            return {
-                "dias": 0,
-                "horas": 0.0,
-                "valor_hora": VALOR_POR_HORA_DEFAULT,
-                "monto": 0.0,
-                "periodo": "Sin periodo",
-            }
+        ultimo_mes: dict = cast(dict, next(iter(meses_historicos)))
+        periodo_registros_ultimo = list(ultimo_mes.get("registros") or [])
+        if not periodo_registros_ultimo:
+            return _SIN_DATOS
 
-        fecha_ultimo = _parse_fecha_form(getattr(periodo_registros[-1], "fecha", None))
-        if fecha_ultimo:
-            dias_periodo = max((fecha_salida - date(fecha_salida.year, fecha_salida.month, 1)).days + 1, 1)
-
-        run_id = next((reg.run_id for reg in periodo_registros if reg.run_id is not None), None)
+        run_id = next((reg.run_id for reg in periodo_registros_ultimo if reg.run_id is not None), None)
         valor_hora = VALOR_POR_HORA_DEFAULT
         if run_id is not None:
             run = CalculationRun.query.get(int(run_id))
             if run and float(run.valor_por_hora or 0) > 0:
                 valor_hora = float(run.valor_por_hora)
 
-        horas_normales_mes = sum(float(reg.horas_normales or 0) for reg in periodo_registros)
-        horas_especiales_mes = sum(float(reg.horas_especiales or 0) for reg in periodo_registros)
-        horas_total_mes = horas_normales_mes + horas_especiales_mes
-        monto_mes = sum(float(reg.sueldo_final or 0) for reg in periodo_registros)
-        dias_registrados_mes = max(len(periodo_registros), 1)
+        horas_normales_mes   = sum(float(reg.horas_normales or 0)   for reg in periodo_registros_ultimo)
+        horas_especiales_mes = sum(float(reg.horas_especiales or 0) for reg in periodo_registros_ultimo)
+        horas_feriado_mes    = sum(float(getattr(reg, "horas_feriado", 0) or 0) for reg in periodo_registros_ultimo)
+        horas_total_mes = horas_normales_mes + horas_especiales_mes + horas_feriado_mes
+        monto_mes_completo = sum(float(reg.sueldo_final or 0) for reg in periodo_registros_ultimo)
+        dias_registrados_mes = max(len(periodo_registros_ultimo), 1)
 
-        horas_promedio_dia = horas_total_mes / dias_registrados_mes
-        monto_promedio_dia = monto_mes / dias_registrados_mes
+        fecha_ref = _parse_fecha_form(getattr(next(iter(periodo_registros_ultimo)), "fecha", None))
+        mes_ref = (
+            f"{_mes_es(fecha_ref.month)} {fecha_ref.year}"
+            if fecha_ref and 1 <= fecha_ref.month <= 12
+            else "último mes"
+        )
 
-        return {
-            "dias": dias_periodo,
-            "horas": round(horas_promedio_dia * dias_periodo, 2),
-            "valor_hora": round(valor_hora, 2),
-            "monto": round(monto_promedio_dia * dias_periodo, 2),
-            "periodo": f"{fecha_salida.year:04d}-{fecha_salida.month:02d}-01 al {fecha_salida.isoformat()}",
-        }
+        if not ultimo_sueldo_pagado:
+            fecha_fin_mes = (
+                date(fecha_ref.year, fecha_ref.month,
+                     calendar.monthrange(fecha_ref.year, fecha_ref.month)[1])
+                if fecha_ref else None
+            )
+            return {
+                "dias": dias_registrados_mes,
+                "horas": round(horas_total_mes, 2),
+                "horas_normales":   round(horas_normales_mes, 2),
+                "horas_especiales": round(horas_especiales_mes, 2),
+                "horas_feriado":    round(horas_feriado_mes, 2),
+                "valor_hora": round(valor_hora, 2),
+                "monto": round(monto_mes_completo, 2),
+                "periodo": f"Mes completo ({mes_ref})",
+                "fecha_inicio": fecha_ref.strftime("%d/%m/%Y") if fecha_ref else "",
+                "fecha_fin":    fecha_fin_mes.strftime("%d/%m/%Y") if fecha_fin_mes else "",
+                "modo": "mes_completo",
+            }
+        else:
+            dias_transcurridos = max((fecha_salida - date(fecha_salida.year, fecha_salida.month, 1)).days + 1, 1)
+            monto_promedio_dia    = monto_mes_completo / dias_registrados_mes
+            h_n_dia = horas_normales_mes   / dias_registrados_mes
+            h_e_dia = horas_especiales_mes / dias_registrados_mes
+            h_f_dia = horas_feriado_mes    / dias_registrados_mes
+            return {
+                "dias": dias_transcurridos,
+                "horas": round((horas_total_mes / dias_registrados_mes) * dias_transcurridos, 2),
+                "horas_normales":   round(h_n_dia * dias_transcurridos, 2),
+                "horas_especiales": round(h_e_dia * dias_transcurridos, 2),
+                "horas_feriado":    round(h_f_dia * dias_transcurridos, 2),
+                "valor_hora": round(valor_hora, 2),
+                "monto": round(monto_promedio_dia * dias_transcurridos, 2),
+                "periodo": f"Días parciales en {_mes_es(fecha_salida.month)} {fecha_salida.year} (ref. {mes_ref})",
+                "fecha_inicio": date(fecha_salida.year, fecha_salida.month, 1).strftime("%d/%m/%Y"),
+                "fecha_fin":    fecha_salida.strftime("%d/%m/%Y"),
+                "modo": "dias_parciales",
+            }
 
     run_id = next((reg.run_id for reg in periodo_registros if reg.run_id is not None), None)
     valor_hora = VALOR_POR_HORA_DEFAULT
@@ -1204,36 +1339,92 @@ def _calcular_salario_pendiente_liquidacion(
         if run and float(run.valor_por_hora or 0) > 0:
             valor_hora = float(run.valor_por_hora)
 
-    fecha_periodo = _parse_fecha_form(getattr(periodo_registros[0], "fecha", None))
-    fecha_periodo_texto = fecha_periodo.isoformat() if fecha_periodo else "Sin periodo"
+    fecha_periodo = _parse_fecha_form(getattr(next(iter(periodo_registros)), "fecha", None))
 
-    horas_normales = sum(float(reg.horas_normales or 0) for reg in periodo_registros)
+    horas_normales   = sum(float(reg.horas_normales or 0)   for reg in periodo_registros)
     horas_especiales = sum(float(reg.horas_especiales or 0) for reg in periodo_registros)
-    horas_total = horas_normales + horas_especiales
+    horas_feriado    = sum(float(getattr(reg, "horas_feriado", 0) or 0) for reg in periodo_registros)
+    horas_total = horas_normales + horas_especiales + horas_feriado
     monto = sum(float(reg.sueldo_final or 0) for reg in periodo_registros)
     return {
         "dias": min(len(periodo_registros), dias_periodo),
         "horas": round(horas_total, 2),
+        "horas_normales":   round(horas_normales, 2),
+        "horas_especiales": round(horas_especiales, 2),
+        "horas_feriado":    round(horas_feriado, 2),
         "valor_hora": round(valor_hora, 2),
         "monto": round(monto, 2),
-        "periodo": f"{fecha_periodo_texto} al {fecha_salida.isoformat()}",
+        "periodo": f"{fecha_periodo.strftime('%d/%m/%Y') if fecha_periodo else ''} al {fecha_salida.strftime('%d/%m/%Y')}",
+        "fecha_inicio": fecha_periodo.strftime("%d/%m/%Y") if fecha_periodo else "",
+        "fecha_fin":    fecha_salida.strftime("%d/%m/%Y"),
+        "modo": "periodo_actual",
     }
 
 
-def _calcular_aguinaldo_proporcional(registros: list[EmployeePayroll], fecha_salida: date | None) -> dict:
+def _calcular_aguinaldo_proporcional(
+    registros: list[EmployeePayroll],
+    fecha_salida: date | None,
+    fecha_ingreso: date | None = None,
+) -> dict:
     periodos = _obtener_ultimos_periodos(registros, fecha_salida, cantidad=6)
-    total_salarios = 0.0
-    periodos_labels = []
-    for mes in periodos:
-        total_salarios += float(mes.get("total_sueldos") or 0)
-        periodos_labels.append(mes.get("mes_nombre", ""))
 
+    # Mapa (year, month) -> total sueldo del mes
+    meses_con_datos_map: dict[tuple[int, int], float] = {
+        (int(mes.get("year") or 0), int(mes.get("month") or 0)): float(mes.get("total_sueldos") or 0)
+        for mes in periodos
+        if mes.get("year") and mes.get("month")
+    }
+
+    total_salarios = sum(meses_con_datos_map.values())
     aguinaldo = round(total_salarios / 12, 2)
-    periodo_texto = " - ".join(periodos_labels) if periodos_labels else "Sin periodo"
+
+    # Período considerado: desde el 01/01 del año de salida (o fecha_ingreso si es posterior)
+    fecha_inicio_periodo: date | None = None
+    if fecha_salida:
+        inicio_anio = date(fecha_salida.year, 1, 1)
+        fecha_inicio_periodo = (
+            fecha_ingreso
+            if fecha_ingreso and fecha_ingreso > inicio_anio
+            else inicio_anio
+        )
+
+    # Lista de todos los meses del período (con o sin datos)
+    detalle_meses: list[dict] = []
+    if fecha_inicio_periodo and fecha_salida:
+        cy, cm = fecha_inicio_periodo.year, fecha_inicio_periodo.month
+        while (cy, cm) <= (fecha_salida.year, fecha_salida.month):
+            monto = meses_con_datos_map.get((cy, cm))
+            detalle_meses.append({
+                "mes": f"{_mes_es(cm)} {cy}",
+                "monto": monto,
+                "tiene_datos": monto is not None,
+            })
+            cm += 1
+            if cm > 12:
+                cm = 1
+                cy += 1
+
+    meses_con_datos = len(meses_con_datos_map)
+    meses_esperados = len(detalle_meses) if detalle_meses else (fecha_salida.month if fecha_salida else 12)
+    meses_faltantes = sum(1 for m in detalle_meses if not m["tiene_datos"])
+
+    periodo_texto = (
+        f"{fecha_inicio_periodo.strftime('%d/%m/%Y')} al {fecha_salida.strftime('%d/%m/%Y')}"
+        if fecha_inicio_periodo and fecha_salida
+        else (" - ".join(m.get("mes_nombre", "") for m in periodos) or "Sin periodo")
+    )
+
     return {
         "periodo": periodo_texto,
         "total_salarios": round(total_salarios, 2),
         "aguinaldo": aguinaldo,
+        "meses_con_datos": meses_con_datos,
+        "meses_esperados": meses_esperados,
+        "meses_faltantes": meses_faltantes,
+        "alerta_meses_incompletos": meses_faltantes > 0,
+        "detalle_meses": detalle_meses,
+        "fecha_inicio_periodo": fecha_inicio_periodo.strftime("%d/%m/%Y") if fecha_inicio_periodo else "",
+        "fecha_fin_periodo": fecha_salida.strftime("%d/%m/%Y") if fecha_salida else "",
     }
 
 
@@ -1259,17 +1450,31 @@ def _calcular_vacaciones_por_liquidacion(
             "dias_usados": round(vacaciones_usadas, 2),
             "dias_pendientes": 0.0,
             "promedio_diario": 0.0,
+            "promedio_mensual": 0.0,
             "monto": 0.0,
             "dias_antiguedad": 0,
             "periodo_promedio": "Sin periodo",
+            "meses_detalle": [],
         }
 
     dias_antiguedad = max((fecha_salida - fecha_ingreso).days, 0)
     meses_periodo = _obtener_ultimos_periodos(registros, fecha_salida, cantidad=6)
-    total_salarios = sum(float(mes.get("total_sueldos") or 0) for mes in meses_periodo)
-    dias_trabajados = sum(int(mes.get("dias_trabajados") or 0) for mes in meses_periodo)
-    promedio_diario = round((total_salarios / dias_trabajados), 2) if dias_trabajados else 0.0
-    periodo_promedio = " - ".join(mes.get("mes_nombre", "") for mes in meses_periodo if mes.get("mes_nombre"))
+
+    # Construir detalle mensual
+    meses_detalle = [
+        {"nombre": mes.get("mes_nombre", ""), "total": float(mes.get("total_sueldos") or 0)}
+        for mes in meses_periodo
+        if mes.get("mes_nombre")
+    ]
+
+    total_salarios = sum(m["total"] for m in meses_detalle)
+    cant_meses = max(len(meses_detalle), 1)
+
+    # Fórmula art. 92 inc. b CT: promedio mensual = total / meses; promedio diario = mensual / 30
+    promedio_mensual = round(total_salarios / cant_meses, 2) if total_salarios else 0.0
+    promedio_diario = round(promedio_mensual / 30, 2)
+
+    periodo_promedio = " - ".join(m["nombre"] for m in meses_detalle)
 
     anios_completos = dias_antiguedad // 365
     dias_restantes = dias_antiguedad % 365
@@ -1287,9 +1492,11 @@ def _calcular_vacaciones_por_liquidacion(
         "dias_usados": round(vacaciones_usadas, 2),
         "dias_pendientes": dias_pendientes,
         "promedio_diario": promedio_diario,
+        "promedio_mensual": promedio_mensual,
         "monto": monto,
         "dias_antiguedad": dias_antiguedad,
         "periodo_promedio": periodo_promedio or "Sin periodo",
+        "meses_detalle": meses_detalle,
     }
 
 
@@ -1297,14 +1504,21 @@ def _calcular_preaviso_e_indemnizacion(tipo_liquidacion: str, dias_antiguedad: i
     if tipo_liquidacion != "despido-sin-causa":
         return {"preaviso": 0.0, "indemnizacion": 0.0, "preaviso_dias": 0, "indemnizacion_dias": 0}
 
-    anios = max(dias_antiguedad // 365, 1)
-    if dias_antiguedad < 365:
+    # Escala de preaviso: art. 87 CT (4 tramos)
+    if dias_antiguedad <= 365:
         preaviso_dias = 30
     elif dias_antiguedad <= 5 * 365:
         preaviso_dias = 45
-    else:
+    elif dias_antiguedad <= 10 * 365:
         preaviso_dias = 60
+    else:
+        preaviso_dias = 90  # art. 87 CT: más de 10 años → 90 días
 
+    # Indemnización: art. 91 CT — 15 días por año; fracción > 6 meses = 1 año
+    anios_completos = dias_antiguedad // 365
+    meses_fraccion = (dias_antiguedad % 365) // 30
+    anios = anios_completos + (1 if meses_fraccion >= 6 else 0)
+    anios = max(anios, 1)  # mínimo 1 año si ya superó los 6 meses (art. 91)
     indemnizacion_dias = 15 * anios
     return {
         "preaviso": round(preaviso_dias * promedio_diario, 2),
@@ -1519,16 +1733,28 @@ def liquidaciones(empleado_id):
         .order_by(desc(Liquidacion.created_at))
         .all()
     )
+    fecha_ingreso_empleado = _parse_fecha_form(getattr(empleado, "hire_date", None))
     historial_liquidaciones = []
     for item in historial_liquidaciones_raw:
         fecha_salida_item = _parse_fecha_form(getattr(item, "fecha_salida", None))
         detalle_texto = _detalle_calculo_liquidacion_historial(item)
+        periodo_trabajado_str = "N/D"
+        if fecha_salida_item:
+            if fecha_ingreso_empleado:
+                inicio_periodo = max(date(fecha_salida_item.year, 1, 1), fecha_ingreso_empleado)
+            else:
+                inicio_periodo = date(fecha_salida_item.year, 1, 1)
+            periodo_trabajado_str = (
+                f"{inicio_periodo.strftime('%d/%m/%Y')} - {fecha_salida_item.strftime('%d/%m/%Y')}"
+            )
         historial_liquidaciones.append(
             {
                 "id": item.id,
                 "tipo": _label_tipo_liquidacion(item.tipo),
+                "tipo_key": (item.tipo or "").strip(),
                 "fecha_registro": item.created_at.strftime("%d/%m/%Y %H:%M") if item.created_at else "N/D",
                 "fecha_salida": fecha_salida_item.strftime("%d/%m/%Y") if fecha_salida_item else "N/D",
+                "periodo_trabajado": periodo_trabajado_str,
                 "salario_pendiente": float(item.salario_pendiente or 0),
                 "aguinaldo": float(item.aguinaldo or 0),
                 "vacaciones": float(item.vacaciones or 0),
@@ -1545,7 +1771,11 @@ def liquidaciones(empleado_id):
         .first()
     )
     ultima_fecha_salida = _parse_fecha_form(getattr(ultima_liquidacion, "fecha_salida", None)) if ultima_liquidacion else None
-    fecha_salida_default = ultima_fecha_salida or date.today()
+    # Prioridad: último registro de nómina cargado > última liquidación > hoy
+    ultima_fecha_nomina = None
+    if registros:
+        ultima_fecha_nomina = _parse_fecha_form(getattr(next(reversed(registros)), "fecha", None))
+    fecha_salida_default = ultima_fecha_nomina or ultima_fecha_salida or date.today()
     try:
         estado_vacaciones = calcular_vacaciones_desde_historial(historial_mensual=historial_mensual)
     except ValueError:
@@ -1559,8 +1789,9 @@ def liquidaciones(empleado_id):
 
     vacaciones_usadas = float(empleado.vacation_used_days or 0.0)
     fecha_salida = fecha_salida_default
-    salario_pendiente_data = _calcular_salario_pendiente_liquidacion(registros, fecha_salida)
-    aguinaldo_data = _calcular_aguinaldo_proporcional(registros, fecha_salida)
+    ultimo_sueldo_pagado = False  # GET: default a no pagado (más seguro)
+    salario_pendiente_data = _calcular_salario_pendiente_liquidacion(registros, fecha_salida, ultimo_sueldo_pagado)
+    aguinaldo_data = _calcular_aguinaldo_proporcional(registros, fecha_salida, fecha_ingreso_empleado)
     vacaciones_data = _calcular_vacaciones_por_liquidacion(
         empleado=empleado,
         registros=registros,
@@ -1585,9 +1816,10 @@ def liquidaciones(empleado_id):
     if request.method == "POST":
         tipo_liquidacion = (request.form.get("liq_tipo") or "renuncia-voluntaria").strip()
         fecha_salida = _parse_fecha_form(request.form.get("liq_salida")) or fecha_salida_default
+        ultimo_sueldo_pagado = request.form.get("ultimo_sueldo_pagado", "no") == "si"
 
-        salario_pendiente_data = _calcular_salario_pendiente_liquidacion(registros, fecha_salida)
-        aguinaldo_data = _calcular_aguinaldo_proporcional(registros, fecha_salida)
+        salario_pendiente_data = _calcular_salario_pendiente_liquidacion(registros, fecha_salida, ultimo_sueldo_pagado)
+        aguinaldo_data = _calcular_aguinaldo_proporcional(registros, fecha_salida, fecha_ingreso_empleado)
 
         vacaciones_usadas = float(request.form.get("vacaciones_usadas") or 0.0)
         fecha_desde = _parse_fecha_form(request.form.get("vacaciones_desde"))
@@ -1666,11 +1898,35 @@ def liquidaciones(empleado_id):
         f"Vacaciones utilizadas: {vacaciones_usadas:.2f} días · "
         f"Vacaciones pendientes: {vacaciones_pendientes:.2f} días"
     )
-    detalle_salario_pendiente = (
-        f"{salario_pendiente_data['dias']} días / {salario_pendiente_data['horas']:.2f} hs × Gs. {salario_pendiente_data['valor_hora']:,.0f}"
-    )
+    _sp = salario_pendiente_data
+    _lineas_sp: list[str] = []
+    if _sp.get("fecha_inicio") and _sp.get("fecha_fin"):
+        _lineas_sp.append(f"Período pendiente: {_sp['fecha_inicio']} al {_sp['fecha_fin']}")
+    _lineas_sp.append(f"Horas normales: <strong>{_fmt_hhmm(_sp.get('horas_normales', 0.0))}</strong>")
+    _lineas_sp.append(f"Horas especiales: <strong>{_fmt_hhmm(_sp.get('horas_especiales', 0.0))}</strong>")
+    if _sp.get("horas_feriado", 0.0) > 0:
+        _lineas_sp.append(f"Horas feriado: <strong>{_fmt_hhmm(_sp.get('horas_feriado', 0.0))}</strong> (×2)")
+    _lineas_sp.append(f"Valor hora: <strong>Gs. {_sp.get('valor_hora', 0.0):,.0f}</strong>")
+    _lineas_sp.append(f"Total: <strong>Gs. {salario_pendiente:,.0f}</strong>")
+    detalle_salario_pendiente = "\n".join(_lineas_sp)
     meses_aguinaldo = len(_obtener_ultimos_periodos(registros, fecha_salida_default, 12))
-    detalle_aguinaldo = f"{aguinaldo_data['periodo']} ({meses_aguinaldo}/12)"
+    # Desglose mes a mes del aguinaldo (auditable)
+    _lineas_ag = [f"Período: {aguinaldo_data['fecha_inicio_periodo']} al {aguinaldo_data['fecha_fin_periodo']}"]
+    for _m in aguinaldo_data.get("detalle_meses", []):
+        if _m["tiene_datos"]:
+            _lineas_ag.append(f"{_m['mes']}: <strong>Gs. {_m['monto']:,.0f}</strong>")
+        else:
+            _lineas_ag.append(f"{_m['mes']}: <em>sin registros</em>")
+    _lineas_ag.append(f"Total salarios: <strong>Gs. {aguinaldo_data['total_salarios']:,.0f}</strong>")
+    _lineas_ag.append(
+        f"Aguinaldo = Gs. {aguinaldo_data['total_salarios']:,.0f} / 12 = "
+        f"<strong>Gs. {aguinaldo_data['aguinaldo']:,.0f}</strong>"
+    )
+    detalle_aguinaldo = "\n".join(_lineas_ag)
+    aguinaldo_alerta = aguinaldo_data.get("alerta_meses_incompletos", False)
+    aguinaldo_meses_con_datos = aguinaldo_data.get("meses_con_datos", meses_aguinaldo)
+    aguinaldo_meses_esperados = aguinaldo_data.get("meses_esperados", 12)
+    aguinaldo_meses_faltantes = aguinaldo_data.get("meses_faltantes", 0)
     detalle_vacaciones = (
         f"{detalle_vacaciones} · {vacaciones_data['dias_pendientes']:.2f} días × Gs. {vacaciones_data['promedio_diario']:,.0f}"
     )
@@ -1779,6 +2035,7 @@ def liquidaciones(empleado_id):
         ultima_liquidacion=ultima_liquidacion,
         periodos_registrados=periodos_registrados,
         fecha_ingreso=vacaciones_data["fecha_ingreso"],
+        vacaciones_dias_antiguedad=vacaciones_data["dias_antiguedad"],
         salario_pendiente=salario_pendiente,
         aguinaldo=aguinaldo,
         preaviso=preaviso,
@@ -1786,6 +2043,8 @@ def liquidaciones(empleado_id):
         total_liquidacion=total_liquidacion,
         fecha_salida_default=_formatear_fecha_iso(fecha_salida_default),
         promedio_diario_vacaciones=vacaciones_data["promedio_diario"],
+        promedio_mensual_vacaciones=vacaciones_data["promedio_mensual"],
+        vacaciones_meses_promedio=vacaciones_data["meses_detalle"],
         vacaciones_periodo_promedio=vacaciones_data["periodo_promedio"],
         detalle_salario_pendiente=detalle_salario_pendiente,
         detalle_aguinaldo=detalle_aguinaldo,
@@ -1798,6 +2057,12 @@ def liquidaciones(empleado_id):
         timeline_antiguedad=timeline_antiguedad,
         active_tab=active_tab,
         historial_liquidaciones=historial_liquidaciones,
+        aguinaldo_alerta=aguinaldo_alerta,
+        aguinaldo_meses_con_datos=aguinaldo_meses_con_datos,
+        aguinaldo_meses_esperados=aguinaldo_meses_esperados,
+        aguinaldo_meses_faltantes=aguinaldo_meses_faltantes,
+        ultimo_sueldo_pagado=ultimo_sueldo_pagado,
+        salario_modo=salario_pendiente_data.get("modo", ""),
     )
 
 
@@ -2025,7 +2290,8 @@ def correcciones():
     # Horarios ambiguos: intercambiar entrada <-> salida
     for key in request.form:
         if key.startswith("intercambiar_"):
-            idx = int(key.split("_", 1)[1])
+            _, idx_str = key.split("_", 1)
+            idx = int(idx_str)
             entrada = df.at[idx, "Entrada"]
             df.at[idx, "Entrada"] = df.at[idx, "Salida"]
             df.at[idx, "Salida"] = entrada
@@ -2355,6 +2621,11 @@ def _ensure_missing_employee_columns():
         "employee_payroll",
         "sueldo_bruto",
         "ALTER TABLE employee_payroll ADD COLUMN sueldo_bruto FLOAT NOT NULL DEFAULT 0",
+    )
+    ensure_column(
+        "employee_payroll",
+        "valor_hora_utilizado",
+        "ALTER TABLE employee_payroll ADD COLUMN valor_hora_utilizado FLOAT",
     )
 
 

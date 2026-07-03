@@ -28,63 +28,130 @@
       </div>
 
       <section id="historial" class="liquidacion-pane" {% if active_tab != 'historial' %}hidden{% endif %}>
-        <h3>Historial</h3>
+        <div class="historial-head">
+          <div>
+            <h3>Historial de liquidaciones</h3>
+            <p class="muted">Listado de todas las liquidaciones realizadas.</p>
+          </div>
+          <div>
+            <div class="search-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" class="search-input" id="historial-search" placeholder="Buscar liquidación..." aria-label="Buscar en historial">
+            </div>
+          </div>
+        </div>
         {% if historial_liquidaciones %}
-          <div class="table-wrap liquidacion-table-wrap">
-            <table>
+          <div class="table-wrap historial-table-wrap">
+            <table class="historial-table">
               <thead>
                 <tr>
-                  <th>Registro</th>
-                  <th>Salida</th>
-                  <th>Tipo</th>
-                  <th style="text-align: right;">Salario Pend.</th>
-                  <th style="text-align: right;">Aguinaldo</th>
-                  <th style="text-align: right;">Vacaciones</th>
-                  <th style="text-align: right;">Preaviso</th>
-                  <th style="text-align: right;">Indemnización</th>
-                  <th style="text-align: right;">Total</th>
-                  <th style="text-align: center;">Detalle</th>
+                  <th style="width:40px;"></th>
+                  <th>FECHA DE SALIDA</th>
+                  <th>TIPO DE LIQUIDACIÓN</th>
+                  <th>PERÍODO TRABAJADO</th>
+                  <th style="text-align:right;">TOTAL LIQUIDACIÓN</th>
+                  <th>ESTADO</th>
+                  <th style="text-align:center;">ACCIONES</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="historial-tbody">
                 {% for liq in historial_liquidaciones %}
-                  <tr>
-                    <td>{{ liq.fecha_registro }}</td>
-                    <td>{{ liq.fecha_salida }}</td>
-                    <td>{{ liq.tipo }}</td>
-                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.salario_pendiente) }}</td>
-                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.aguinaldo) }}</td>
-                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.vacaciones) }}</td>
-                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.preaviso) }}</td>
-                    <td style="text-align: right;">Gs. {{ "{:,.0f}".format(liq.indemnizacion) }}</td>
-                    <td style="text-align: right;"><strong>Gs. {{ "{:,.0f}".format(liq.total_liquidacion) }}</strong></td>
-                    <td style="text-align: center;">
-                      <button
-                        type="button"
-                        class="btn btn-ghost btn-sm js-liq-detail-toggle"
-                        data-target="liq-detail-{{ liq.id }}"
-                        aria-expanded="false"
-                        aria-controls="liq-detail-{{ liq.id }}"
-                      >
-                        Ver detalle
+                  <tr class="historial-row" data-search="{{ liq.tipo|lower }} {{ liq.fecha_salida }}">
+                    <td>
+                      <button type="button" class="btn-chevron js-liq-detail-toggle" data-target="liq-detail-{{ liq.id }}" aria-expanded="false" aria-label="Expandir">
+                        <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                       </button>
+                    </td>
+                    <td><strong>{{ liq.fecha_salida }}</strong></td>
+                    <td><span class="badge-tipo badge-tipo-{{ liq.tipo_key }}">{{ liq.tipo }}</span></td>
+                    <td class="muted">{{ liq.periodo_trabajado }}</td>
+                    <td style="text-align:right;"><strong>Gs. {{ "{:,.0f}".format(liq.total_liquidacion) }}</strong></td>
+                    <td><span class="badge-estado">Completada</span></td>
+                    <td>
+                      <div class="historial-acciones">
+                        <button type="button" class="btn-icon js-liq-detail-toggle" data-target="liq-detail-{{ liq.id }}" aria-expanded="false" title="Ver detalle">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                        <button type="button" class="btn-icon" disabled title="Descargar PDF (próximamente)">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   <tr id="liq-detail-{{ liq.id }}" class="liq-detail-row" hidden>
-                    <td colspan="10">
-                      <div class="liq-detail-content">
-                        <p>{{ liq.detalle_texto.salario_pendiente }}</p>
-                        <p>{{ liq.detalle_texto.aguinaldo }}</p>
-                        <p>{{ liq.detalle_texto.vacaciones }}</p>
-                        <p>{{ liq.detalle_texto.preaviso }}</p>
-                        <p>{{ liq.detalle_texto.indemnizacion }}</p>
-                        <p><strong>{{ liq.detalle_texto.total }}</strong></p>
+                    <td colspan="7">
+                      <div class="liq-detail-v2">
+                        <div class="liq-detail-v2-left">
+                          <h4>Resumen de liquidación</h4>
+                          <table class="liq-mini-table">
+                            <thead>
+                              <tr><th>CONCEPTO</th><th style="text-align:right;">MONTO (GS.)</th></tr>
+                            </thead>
+                            <tbody>
+                              <tr><td>Salario pendiente</td><td style="text-align:right;">Gs. {{ "{:,.0f}".format(liq.salario_pendiente) }}</td></tr>
+                              <tr><td>Aguinaldo proporcional</td><td style="text-align:right;">Gs. {{ "{:,.0f}".format(liq.aguinaldo) }}</td></tr>
+                              <tr><td>Vacaciones no gozadas</td><td style="text-align:right;">Gs. {{ "{:,.0f}".format(liq.vacaciones) }}</td></tr>
+                              {% if liq.preaviso > 0 %}
+                              <tr><td>Preaviso</td><td style="text-align:right;">Gs. {{ "{:,.0f}".format(liq.preaviso) }}</td></tr>
+                              {% endif %}
+                              {% if liq.indemnizacion > 0 %}
+                              <tr><td>Indemnización</td><td style="text-align:right;">Gs. {{ "{:,.0f}".format(liq.indemnizacion) }}</td></tr>
+                              {% endif %}
+                            </tbody>
+                            <tfoot>
+                              <tr class="liq-mini-total"><td><strong>TOTAL LIQUIDACIÓN</strong></td><td style="text-align:right;"><strong>Gs. {{ "{:,.0f}".format(liq.total_liquidacion) }}</strong></td></tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                        <div class="liq-detail-v2-right">
+                          <div class="liq-resumen-final">
+                            <h4>Resumen final</h4>
+                            <div class="resumen-final-line">
+                              <span>Total haberes</span>
+                              <span>Gs. {{ "{:,.0f}".format(liq.total_liquidacion) }}</span>
+                            </div>
+                            <div class="resumen-final-line">
+                              <span>Descuentos</span>
+                              <span>Gs. 0</span>
+                            </div>
+                            <div class="resumen-final-line resumen-final-total">
+                              <span>Total a pagar</span>
+                              <strong>Gs. {{ "{:,.0f}".format(liq.total_liquidacion) }}</strong>
+                            </div>
+                            <div class="resumen-final-info">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                              <span>Información</span>
+                              <p>Esta liquidación incluye todos los conceptos según la legislación laboral vigente.</p>
+                            </div>
+                          </div>
+                          <button type="button" class="btn btn-outline liq-pdf-btn" disabled title="Próximamente">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Descargar comprobante PDF
+                          </button>
+                        </div>
+                      </div>
+                      <div class="liq-detalles-adicionales">
+                        <strong>Detalles adicionales</strong>
+                        <ul>
+                          <li>Motivo: {{ liq.tipo }}</li>
+                          <li>Fecha de salida: {{ liq.fecha_salida }}</li>
+                          <li>Fecha de cálculo: {{ liq.fecha_registro }}</li>
+                          <li>Observación: Liquidación generada automáticamente.</li>
+                        </ul>
                       </div>
                     </td>
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
+          </div>
+          <div class="historial-pagination">
+            <p class="muted">Mostrando 1 a {{ historial_liquidaciones|length }} de {{ historial_liquidaciones|length }} liquidaciones</p>
+            <div class="pagination-btns">
+              <button class="btn-page" disabled>&#8249;</button>
+              <button class="btn-page btn-page-active">1</button>
+              <button class="btn-page" disabled>&#8250;</button>
+            </div>
           </div>
         {% else %}
           <p class="muted">Todavía no hay liquidaciones generadas para este empleado.</p>
@@ -112,6 +179,33 @@
             <label class="field-label" for="liq_salida">Fecha de salida</label>
             <input id="liq_salida" name="liq_salida" type="date" value="{{ fecha_salida_default }}" />
           </div>
+        </div>
+
+        <div class="sueldo-pagado-box">
+          <p class="sueldo-pagado-label">¿El empleado ya cobró su último sueldo mensual?</p>
+          <div class="sueldo-pagado-options">
+            <label class="sueldo-pagado-opt {% if not ultimo_sueldo_pagado %}is-selected{% endif %}">
+              <input type="radio" name="ultimo_sueldo_pagado" value="no" {% if not ultimo_sueldo_pagado %}checked{% endif %}>
+              <span class="sueldo-opt-icon">✗</span>
+              <span>
+                <strong>No — incluir mes completo</strong>
+                <small>El sueldo del último período registrado todavía no fue pagado</small>
+              </span>
+            </label>
+            <label class="sueldo-pagado-opt {% if ultimo_sueldo_pagado %}is-selected{% endif %}">
+              <input type="radio" name="ultimo_sueldo_pagado" value="si" {% if ultimo_sueldo_pagado %}checked{% endif %}>
+              <span class="sueldo-opt-icon">✓</span>
+              <span>
+                <strong>Sí — solo días trabajados pendientes</strong>
+                <small>Ya se pagó el mes completo; calcular solo los días restantes</small>
+              </span>
+            </label>
+          </div>
+          {% if salario_modo == 'dias_parciales' %}
+          <p class="hint" style="color:var(--warning);">⚠ Calculando solo días parciales desde el inicio del mes de salida.</p>
+          {% elif salario_modo == 'mes_completo' %}
+          <p class="hint" style="color:var(--accent);">✓ Incluyendo el mes completo pendiente de pago.</p>
+          {% endif %}
         </div>
 
         <div class="liq-concepts-box" id="liq_concepts_box">
@@ -144,14 +238,26 @@
             <tbody>
               <tr>
                 <td>Salario pendiente</td>
-                <td data-detail="salary_pending">{{ detalle_salario_pendiente }}</td>
+                <td data-detail="salary_pending" class="detalle-cell-multiline">{{ detalle_salario_pendiente | replace('\n', '<br>') | safe }}</td>
                 <td class="liquidacion-monto">Gs. {{ "{:,.0f}".format(salario_pendiente or 0) }}</td>
               </tr>
               <tr>
                 <td>Aguinaldo proporcional</td>
-                <td data-detail="aguinaldo">{{ detalle_aguinaldo }}</td>
+                <td data-detail="aguinaldo" class="detalle-cell-multiline">{{ detalle_aguinaldo | replace('\n', '<br>') | safe }}</td>
                 <td class="liquidacion-monto">Gs. {{ "{:,.0f}".format(aguinaldo or 0) }}</td>
               </tr>
+              {% if aguinaldo_alerta %}
+              <tr class="fila-alerta-aguinaldo">
+                <td colspan="3">
+                  <div class="alerta-meses-incompletos">
+                    <strong>⚠ Datos incompletos:</strong>
+                    Solo se encontraron <strong>{{ aguinaldo_meses_con_datos }} de {{ aguinaldo_meses_esperados }}</strong> mes(es) con registros cargados en el año.
+                    Faltan <strong>{{ aguinaldo_meses_faltantes }} mes(es)</strong> — el aguinaldo calculado puede estar subestimado.
+                    Cargue los meses faltantes para obtener un resultado exacto.
+                  </div>
+                </td>
+              </tr>
+              {% endif %}
               <tr>
                 <td data-label="vacations">Vacaciones no gozadas</td>
                 <td data-detail="vacations">{{ detalle_vacaciones }}</td>
@@ -194,9 +300,7 @@
     <section class="card liquidacion-side-card">
       <div class="card-body">
         <h3>Estado de vacaciones</h3>
-        <div class="vacation-state-copy">
-          <p><strong>Vacaciones generadas:</strong> {{ vacaciones_generadas|round(2) }} días</p>
-        </div>
+
         <div class="field">
           <label class="field-label" for="vacaciones_usadas">Vacaciones utilizadas</label>
           <input id="vacaciones_usadas" name="vacaciones_usadas" type="number" min="0" step="0.01" value="{{ vacaciones_usadas|round(2) }}" />
@@ -211,10 +315,15 @@
             <input id="vacaciones_hasta" name="vacaciones_hasta" type="date" value="{{ vacaciones_hasta }}" />
           </div>
         </div>
+
         <div class="estado-grid">
           <div>
-            <p class="estado-label">Períodos registrados</p>
-            <strong>{{ periodos_registrados }} mes{{ 'es' if periodos_registrados != 1 else '' }}</strong>
+            <p class="estado-label">Antigüedad</p>
+            <strong>{{ vacaciones_dias_antiguedad }} días</strong>
+          </div>
+          <div>
+            <p class="estado-label">Fecha de ingreso</p>
+            <strong>{{ fecha_ingreso|default('N/D') }}</strong>
           </div>
           <div>
             <p class="estado-label">Vacaciones generadas</p>
@@ -229,14 +338,42 @@
             <strong>{{ vacaciones_pendientes|round(2) }} días</strong>
           </div>
           <div>
-            <p class="estado-label">Fecha de ingreso</p>
-            <strong>{{ fecha_ingreso|default('N/D') }}</strong>
+            <p class="estado-label">Valor día</p>
+            <strong>Gs. {{ "{:,.0f}".format(promedio_diario_vacaciones or 0) }}</strong>
+          </div>
+          <div>
+            <p class="estado-label">Períodos registrados</p>
+            <strong>{{ periodos_registrados }} mes{{ 'es' if periodos_registrados != 1 else '' }}</strong>
           </div>
         </div>
-        <div class="estado-pendientes">
-          <p class="estado-label">Vacaciones pendientes</p>
-          <strong>{{ vacaciones_pendientes|round(2) }} días</strong>
+
+        <div class="estado-pendientes estado-total-vac">
+          <p class="estado-label">Total vacaciones a cobrar</p>
+          <strong>Gs. {{ "{:,.0f}".format(monto_vacaciones_pendientes or 0) }}</strong>
         </div>
+
+        {% if vacaciones_meses_promedio %}
+        <div class="promedio-section">
+          <p class="promedio-section-title">Promedio salarial — art. 92 CT</p>
+          {% for mes in vacaciones_meses_promedio %}
+          <div class="promedio-mes-row">
+            <span>{{ mes.nombre }}</span>
+            <span>Gs. {{ "{:,.0f}".format(mes.total) }}</span>
+          </div>
+          {% endfor %}
+          <div class="promedio-resultados">
+            <div class="promedio-resultado-row">
+              <span>Promedio mensual</span>
+              <strong>Gs. {{ "{:,.0f}".format(promedio_mensual_vacaciones or 0) }}</strong>
+            </div>
+            <div class="promedio-resultado-row promedio-resultado-diario">
+              <span>Promedio diario (÷ 30)</span>
+              <strong>Gs. {{ "{:,.0f}".format(promedio_diario_vacaciones or 0) }}</strong>
+            </div>
+          </div>
+          <p class="hint" style="margin-top:0.4rem;">Usado en: vacaciones, preaviso e indemnización.</p>
+        </div>
+        {% endif %}
       </div>
     </section>
 
@@ -461,18 +598,39 @@
       });
     });
 
+    function toggleLiqDetail(targetId) {
+      const row = document.getElementById(targetId);
+      if (!row) return;
+      const isOpen = !row.hidden;
+      row.hidden = isOpen;
+      document.querySelectorAll(`.js-liq-detail-toggle[data-target="${targetId}"]`).forEach((btn) => {
+        btn.setAttribute("aria-expanded", isOpen ? "false" : "true");
+        const chevron = btn.querySelector(".chevron-icon");
+        if (chevron) chevron.classList.toggle("is-open", !isOpen);
+      });
+    }
+
     detailToggles.forEach((button) => {
       button.addEventListener("click", function () {
-        const targetId = this.dataset.target;
-        const row = document.getElementById(targetId);
-        if (!row) return;
-
-        const isOpen = this.getAttribute("aria-expanded") === "true";
-        row.hidden = isOpen;
-        this.setAttribute("aria-expanded", isOpen ? "false" : "true");
-        this.textContent = isOpen ? "Ver detalle" : "Ocultar detalle";
+        toggleLiqDetail(this.dataset.target);
       });
     });
+
+    const historialSearch = document.getElementById("historial-search");
+    if (historialSearch) {
+      historialSearch.addEventListener("input", function () {
+        const q = this.value.toLowerCase();
+        document.querySelectorAll("#historial-tbody .historial-row").forEach((row) => {
+          const match = !q || (row.dataset.search || "").toLowerCase().includes(q);
+          row.hidden = !match;
+          const detailId = row.querySelector(".js-liq-detail-toggle")?.dataset.target;
+          if (detailId && !match) {
+            const detailRow = document.getElementById(detailId);
+            if (detailRow) detailRow.hidden = true;
+          }
+        });
+      });
+    }
 
     if (initialTab) {
       activateTab(initialTab);
@@ -493,6 +651,18 @@
       vacationToInput.addEventListener("change", syncVacationUsedFromRange);
     }
     updateVacationPendingPreview();
+
+    // Toggle visual: último sueldo pagado
+    document.querySelectorAll(".sueldo-pagado-opt input[type='radio']").forEach(function (radio) {
+      radio.addEventListener("change", function () {
+        document.querySelectorAll(".sueldo-pagado-opt").forEach(function (opt) {
+          opt.classList.remove("is-selected");
+        });
+        if (this.checked) {
+          this.closest(".sueldo-pagado-opt").classList.add("is-selected");
+        }
+      });
+    });
   })();
 </script>
 {% endblock %}

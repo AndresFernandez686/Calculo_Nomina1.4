@@ -32,6 +32,10 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='css/styles.css') }}"
     />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/responsive.css') }}"
+    />
   </head>
   <body>
     <header class="topbar">
@@ -78,6 +82,15 @@
       especiales 20:00&ndash;22:00 (+30%) &middot; Feriados x2
     </footer>
 
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="loading-overlay" aria-hidden="true" role="status" aria-label="Procesando">
+      <div class="loading-card">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <p class="loading-title" id="loading-title-text">Procesando...</p>
+        <p class="loading-subtitle">Por favor espere, esto puede tomar unos segundos.</p>
+      </div>
+    </div>
+
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         var toggle = document.getElementById("theme-toggle-input");
@@ -92,6 +105,59 @@
           localStorage.setItem("theme", nextTheme);
         });
       });
+    </script>
+
+    <script>
+      (function () {
+        var overlay = document.getElementById("loading-overlay");
+        var titleEl = document.getElementById("loading-title-text");
+        var LOADING_MIN_MS = 10000;
+        var shownAt = null;
+        var hideTimer = null;
+
+        function showLoading(label) {
+          if (!overlay) return;
+          if (titleEl && label) titleEl.textContent = label;
+          overlay.classList.add("is-active");
+          overlay.setAttribute("aria-hidden", "false");
+          shownAt = Date.now();
+        }
+
+        function scheduleHide() {
+          if (!overlay) return;
+          var elapsed = shownAt ? Date.now() - shownAt : LOADING_MIN_MS;
+          var remaining = Math.max(LOADING_MIN_MS - elapsed, 0);
+          clearTimeout(hideTimer);
+          hideTimer = setTimeout(function () {
+            overlay.classList.remove("is-active");
+            overlay.setAttribute("aria-hidden", "true");
+            // Re-habilitar botones
+            document.querySelectorAll(".btn-loading").forEach(function (btn) {
+              btn.classList.remove("btn-loading");
+              btn.disabled = false;
+            });
+          }, remaining);
+        }
+
+        var SUBMIT_BUTTONS = [
+          { selector: "button[type='submit'].btn-primary", label: "Procesando..." },
+        ];
+
+        document.querySelectorAll("form").forEach(function (form) {
+          form.addEventListener("submit", function () {
+            var submitBtn = form.querySelector("button[type='submit'].btn-primary");
+            if (!submitBtn) return;
+            var label = submitBtn.textContent.trim().includes("liquidación")
+              ? "Generando liquidación..."
+              : "Procesando datos...";
+            showLoading(label);
+            submitBtn.classList.add("btn-loading");
+            submitBtn.disabled = true;
+            // Si el servidor tarda más de 10 s o hay error, ocultar el overlay
+            scheduleHide();
+          });
+        });
+      })();
     </script>
 
     {% block scripts %}{% endblock %}

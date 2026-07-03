@@ -1,0 +1,424 @@
+/*
+ * responsive.css — Sistema de breakpoints completo
+ *
+ * Breakpoints:
+ *   xs  ≤ 480px   teléfonos pequeños
+ *   sm  ≤ 640px   teléfonos
+ *   md  ≤ 768px   teléfonos grandes / paisaje
+ *   lg  ≤ 960px   tablets
+ *   xl  > 960px   escritorio (gestionado en styles.css)
+ */
+
+/* ─── Topbar: sincronizar max-width con el container ─────────── */
+@media (min-width: 961px) {
+  .topbar-inner {
+    max-width: 1360px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────── */
+/*  LG ≤ 960px — Tablets                                          */
+/* ─────────────────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  /* Liquidaciones: apilar main + side */
+  .liquidaciones-dashboard {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "main"
+      "side"
+      "types"
+      "history";
+  }
+
+  /* Detalle expandido del historial: apilar */
+  .liq-detail-v2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────── */
+/*  MD ≤ 768px — Teléfonos grandes / paisaje                      */
+/* ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Grid de dos columnas: una sola */
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  /* Ocultar columna "Período trabajado" en historial */
+  .historial-table thead th:nth-child(4),
+  .historial-table tbody td:nth-child(4) {
+    display: none;
+  }
+
+  /* Tablas generales: reducir padding */
+  thead th,
+  tbody td {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  /* Payroll IPS grid */
+  .payroll-ips-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Accordion resumen compacto: 2 columnas */
+  .month-summary.month-summary-compact {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Correction grid: una columna */
+  .correction-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Seniority wrap */
+  .seniority-wrap {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .seniority-legend {
+    width: 100%;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────── */
+/*  SM ≤ 640px — Teléfonos                                        */
+/* ─────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Container: reducir padding lateral */
+  .container {
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  /* Hero */
+  .hero {
+    padding: 1.6rem 1.25rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .hero h1 {
+    font-size: 1.5rem;
+  }
+
+  /* Topbar: compactar */
+  .topbar-inner {
+    padding: 0.65rem 1rem;
+  }
+
+  .topbar-link {
+    padding: 0.35rem 0.55rem;
+    font-size: 0.82rem;
+  }
+
+  .brand small {
+    display: none;
+  }
+
+  /* Cards */
+  .card-body {
+    padding: 1.1rem;
+  }
+
+  .card-head {
+    padding: 0.85rem 1.1rem;
+  }
+
+  /* Liquidaciones: formulario en columna única */
+  .liquidacion-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Conceptos: columna única */
+  .liq-concepts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Acciones de liquidación: full width */
+  .liquidacion-actions {
+    flex-direction: column;
+  }
+
+  .liquidacion-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Historial head: búsqueda expandida */
+  .historial-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .search-wrap {
+    width: 100%;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  /* Ocultar también "Estado" en historial */
+  .historial-table thead th:nth-child(6),
+  .historial-table tbody td:nth-child(6) {
+    display: none;
+  }
+
+  /* Paginación: centrada y apilada */
+  .historial-pagination {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.65rem;
+  }
+
+  /* Acciones generales */
+  .actions-bar {
+    flex-direction: column;
+  }
+
+  .actions-bar .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Month actions */
+  .month-actions {
+    flex-direction: column;
+  }
+
+  .month-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Payroll metric cards: 2 col */
+  .payroll-metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Section title */
+  .section-title {
+    font-size: 1rem;
+    margin: 1.25rem 0 0.7rem;
+  }
+
+  /* Donut wrap: apilar */
+  .donut-wrap {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Toggle de archivos */
+  .toggle {
+    grid-template-columns: 1fr;
+  }
+
+  /* Loading card */
+  .loading-card {
+    padding: 1.75rem 1.5rem;
+    margin: 0 1rem;
+    min-width: unset;
+    width: calc(100% - 2rem);
+  }
+
+  /* Feriados: 2 columnas */
+  .feriados-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Tipos de liquidación: 2 col */
+  .tipos-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Métricas generales: 2 col */
+  .metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Accordion resumen compacto: 1 col */
+  .month-summary.month-summary-compact {
+    grid-template-columns: 1fr;
+  }
+
+  /* Liq detail v2 right: sin min-width */
+  .liq-detail-v2-right {
+    min-width: unset;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────── */
+/*  XS ≤ 480px — Teléfonos pequeños                              */
+/* ─────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  /* Container: mínimo padding */
+  .container {
+    padding: 1rem 0.75rem 2.5rem;
+  }
+
+  /* Hero: más compacto */
+  .hero {
+    padding: 1.25rem 1rem;
+  }
+
+  .hero h1 {
+    font-size: 1.25rem;
+  }
+
+  .hero p {
+    font-size: 0.88rem;
+  }
+
+  /* Topbar: ocultar enlaces de nav, mantener brand + toggle */
+  .topbar-link {
+    display: none;
+  }
+
+  .topbar-inner {
+    padding: 0.6rem 0.85rem;
+  }
+
+  /* Cards más compactos */
+  .card-body {
+    padding: 0.85rem;
+  }
+
+  .card-head {
+    padding: 0.75rem 0.85rem;
+  }
+
+  /* Estado grid: una columna */
+  .estado-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Historial: ocultar tipo de liquidación también, dejar fecha + total + acciones */
+  .historial-table thead th:nth-child(3),
+  .historial-table tbody td:nth-child(3) {
+    display: none;
+  }
+
+  /* Payroll metrics: 1 col */
+  .payroll-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Tipos: 1 col */
+  .tipos-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Feriados: 1 col */
+  .feriados-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Métricas: 1 col */
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  /* Liquidación total highlight */
+  .liquidacion-total-highlight strong {
+    font-size: 1.2rem;
+  }
+
+  /* Badge tipo en historial: text más pequeño */
+  .badge-tipo {
+    font-size: 0.68rem;
+    padding: 0.18rem 0.45rem;
+  }
+
+  /* Page title */
+  .page-title {
+    font-size: 1.3rem;
+  }
+
+  /* Liq mini table: reducir padding */
+  .liq-mini-table td,
+  .liq-mini-table th {
+    padding: 0.35rem 0.4rem;
+  }
+
+  /* Paginación */
+  .btn-page {
+    padding: 0.28rem 0.5rem;
+    font-size: 0.78rem;
+  }
+
+  /* Detalles adicionales */
+  .liq-detalles-adicionales ul {
+    font-size: 0.78rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────── */
+/*  Orientación horizontal en móviles pequeños                   */
+/* ─────────────────────────────────────────────────────────────── */
+@media (max-height: 500px) and (max-width: 900px) {
+  .hero {
+    padding: 1rem 1.25rem;
+  }
+
+  .hero h1 {
+    font-size: 1.2rem;
+  }
+
+  .hero p {
+    display: none;
+  }
+
+  .loading-card {
+    padding: 1rem 1.5rem;
+    gap: 0.5rem;
+  }
+
+  .loading-spinner {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────── */
+/*  Dark mode ajustes en móvil (badges de tipo)                  */
+/* ─────────────────────────────────────────────────────────────── */
+:root[data-theme="dark"] .badge-tipo-renuncia-voluntaria {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+:root[data-theme="dark"] .badge-tipo-despido-sin-causa {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fdba74;
+}
+
+:root[data-theme="dark"] .badge-tipo-despido-con-causa {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+}
+
+:root[data-theme="dark"] .badge-tipo-fin-de-contrato {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] .badge-estado {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+:root[data-theme="dark"] .alerta-meses-incompletos {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+  border-left-color: #f59e0b;
+}
+
+:root[data-theme="dark"] .resumen-final-info {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(147, 197, 253, 0.3);
+  color: #93c5fd;
+}

@@ -208,6 +208,10 @@
   <div class="action-group">
     <a href="#" class="btn btn-secondary">Historial mensual</a>
     <a href="{{ url_for('liquidaciones', empleado_id=empleado.id) }}" class="btn btn-secondary">Liquidaciones</a>
+    <a href="{{ url_for('historial_salarial', empleado_id=empleado.id) }}" class="btn btn-secondary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Historial salarial
+    </a>
   </div>
 </div>
 

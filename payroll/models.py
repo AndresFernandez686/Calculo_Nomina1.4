@@ -104,6 +104,7 @@ class EmployeePayroll(db.Model):
     sueldo_final: float = db.Column(db.Float, nullable=False, default=0.0)
     observaciones: Optional[str] = db.Column(db.String(255), nullable=True)
     run_id: Optional[int] = db.Column(db.Integer, nullable=True)  # Referencia al cálculo que generó este registro
+    valor_hora_utilizado: Optional[float] = db.Column(db.Float, nullable=True)  # Copia inmutable del valor hora al generar nómina
 
 
 class EmployeeAttendance(db.Model):
@@ -251,3 +252,34 @@ class PromedioLaboral(db.Model):
     promedio_diario: float = db.Column(db.Float, nullable=False, default=0.0)
     promedio_mensual: float = db.Column(db.Float, nullable=False, default=0.0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class HistorialSalarios(db.Model):
+    """Historial de cambios de valor por hora para un empleado (inmutable).
+
+    Cada registro cubre un período: desde ``fecha_inicio`` hasta ``fecha_fin``
+    (null = vigente). Al registrar un aumento se cierra el anterior asignando
+    ``fecha_fin = nueva_fecha_inicio - 1 día``.
+    """
+
+    __tablename__ = "historial_salarios"
+
+    MOTIVOS = ["Ingreso", "Ascenso", "Aumento por salario mínimo", "Ajuste", "Otro"]
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    empleado_id: int = db.Column(
+        db.Integer, db.ForeignKey("employees.id"), nullable=False
+    )
+    fecha_inicio: str = db.Column(db.String(20), nullable=False)
+    fecha_fin: Optional[str] = db.Column(db.String(20), nullable=True)  # null = vigente
+    valor_hora: float = db.Column(db.Float, nullable=False)
+    motivo_cambio: str = db.Column(
+        db.String(50), nullable=False, default="Ingreso"
+    )
+    observaciones: Optional[str] = db.Column(db.String(500), nullable=True)
+    usuario: Optional[str] = db.Column(db.String(100), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self) -> str:
+        estado = "vigente" if self.fecha_fin is None else f"hasta {self.fecha_fin}"
+        return f"<HistorialSalarios emp={self.empleado_id} desde={self.fecha_inicio} {estado} Gs.{self.valor_hora:,.0f}>"

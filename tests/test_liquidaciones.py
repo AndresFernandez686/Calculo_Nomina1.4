@@ -76,7 +76,7 @@ def contexto_5anios():
         fecha_salida=salida,
         registros=registros,
         calificacion="no_calificado",
-        vacaciones_usadas_dias=0,
+        vacaciones_usadas_dias=Decimal("0"),
     )
 
 
@@ -110,9 +110,9 @@ def test_escala_vacaciones():
 def test_salario_pendiente_usa_formula_jornalero():
     salida = date(2026, 6, 15)
     registros = [
-        RegistroDiario(date(2026, 6, 10), horas_normales=8, valor_hora=VALOR_HORA),
-        RegistroDiario(date(2026, 6, 11), horas_especiales=2, valor_hora=VALOR_HORA),
-        RegistroDiario(date(2026, 6, 12), horas_feriado=8, valor_hora=VALOR_HORA),
+        RegistroDiario(date(2026, 6, 10), horas_normales=Decimal("8"), valor_hora=VALOR_HORA),
+        RegistroDiario(date(2026, 6, 11), horas_especiales=Decimal("2"), valor_hora=VALOR_HORA),
+        RegistroDiario(date(2026, 6, 12), horas_feriado=Decimal("8"), valor_hora=VALOR_HORA),
     ]
     ctx = ContextoLiquidacion(date(2020, 1, 1), salida, registros)
     concepto = CalculadorSalarioPendiente().calcular(ctx)
@@ -138,6 +138,7 @@ def test_preaviso_no_aplica_en_periodo_de_prueba():
     concepto = CalculadorPreaviso().calcular(ctx)
     assert concepto.aplica is False
     assert concepto.monto == Decimal("0.00")
+    assert concepto.motivo_no_aplicacion is not None
     assert "período de prueba" in concepto.motivo_no_aplicacion
 
 
@@ -146,6 +147,7 @@ def test_indemnizacion_no_aplica_si_antiguedad_menor_6_meses():
     ctx = ContextoLiquidacion(date(2026, 1, 1), salida, [])  # 4 meses
     concepto = CalculadorIndemnizacion().calcular(ctx)
     assert concepto.aplica is False
+    assert concepto.motivo_no_aplicacion is not None
     assert "art. 91" in concepto.motivo_no_aplicacion.lower()
 
 
@@ -166,7 +168,7 @@ def test_vacaciones_resta_dias_usados():
     ingreso = date(2023, 1, 1)
     salida = date(2026, 6, 30)
     registros = _registros_mensuales(date(2025, 7, 1), salida)
-    ctx = ContextoLiquidacion(ingreso, salida, registros, vacaciones_usadas_dias=5)
+    ctx = ContextoLiquidacion(ingreso, salida, registros, vacaciones_usadas_dias=Decimal("5"))
     concepto = CalculadorVacaciones().calcular(ctx)
     assert concepto.aplica is True
     assert any("Días usados" in linea for linea in concepto.detalle_calculo)
@@ -214,12 +216,13 @@ def test_ips_solo_sobre_conceptos_remunerativos(contexto_5anios):
     assert ips.monto == -esperado
     # Preaviso e indemnización NO son remunerativos
     preaviso = resultado.concepto("Preaviso")
+    assert preaviso is not None
     assert preaviso.remunerativo is False
 
 
 def test_total_neto_descuenta_ips(contexto_5anios):
     resultado = RenunciaVoluntaria(contexto_5anios).calcular()
-    suma = sum(c.monto for c in resultado.conceptos if c.aplica)
+    suma = sum((c.monto for c in resultado.conceptos if c.aplica), Decimal("0"))
     assert resultado.total_neto == suma.quantize(Decimal("0.01"))
     ips = next(c for c in resultado.conceptos if "IPS trabajador" in c.nombre)
     assert ips.monto <= 0

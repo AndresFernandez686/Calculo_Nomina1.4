@@ -96,3 +96,28 @@ Uso:
 - El esquema está preparado para agregar más tipos de liquidación sin cambiar la lógica base.
 - El valor de salida en UI depende de la fecha de salida seleccionada en el formulario.
 - La redirección post-guardado al historial facilita validación operativa inmediata.
+
+## Verificación de parámetros legales (22/22 tests pasan)
+
+| Parámetro | Módulo `payroll/liquidaciones` | Web UI (`app.py`) |
+|---|---|---|
+| Renuncia voluntaria: salario + aguinaldo + vacaciones, sin preaviso ni indemnización | ✅ | ✅ |
+| Despido sin causa: todos los 5 conceptos | ✅ | ✅ |
+| Despido con causa: solo salario + aguinaldo + vacaciones | ✅ | ✅ |
+| Abandono de trabajo: descuento por falta de preaviso del trabajador | ✅ | ✅ |
+| IPS 9% solo sobre conceptos remunerativos (no preaviso ni indemnización) | ✅ | ✅ |
+| Indemnización doble × 30 días si antigüedad ≥ 10 años (art. 94) | ✅ | — (no aplica en UI por duplicidad) |
+| Preaviso: no aplica en período de prueba (art. 58) | ✅ | ✅ |
+| Indemnización: no aplica si antigüedad < 6 meses (art. 91) | ✅ | ✅ |
+
+## Escala de preaviso corregida (art. 87 CT)
+
+| Antigüedad | Antes (incorrecto) | Ahora (correcto) |
+|---|---|---|
+| ≤ 1 año | 30 días | 30 días |
+| 1–5 años | 45 días | 45 días |
+| 5–10 años | 60 días | 60 días |
+| **> 10 años** | **60 días ❌** | **90 días ✅** |
+
+También se corrigió el cálculo de años para indemnización: fracción > 6 meses = 1 año adicional (conforme art. 91 CT).
+
