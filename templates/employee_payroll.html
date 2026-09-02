@@ -185,6 +185,15 @@
           >
             Descargar PDF
           </a>
+          <form
+            method="post"
+            action="{{ url_for('eliminar_mes_nomina', empleado_id=empleado_id, year=mes.year, month=mes.month) }}"
+            class="js-delete-month-form"
+            data-month-name="{{ mes.mes_nombre }}"
+            data-record-count="{{ mes.registros | length }}"
+          >
+            <button type="submit" class="btn btn-danger-soft btn-sm">Eliminar mes</button>
+          </form>
         </div>
       </div>
     </div>
@@ -250,6 +259,7 @@
     const accordions = document.querySelectorAll('.accordion-toggle');
     const dayBodies = document.querySelectorAll('.js-days-body');
     const toggleDayButtons = document.querySelectorAll('.js-toggle-days');
+    const deleteMonthForms = document.querySelectorAll('.js-delete-month-form');
 
     function applyRowsPreview(tbody, expanded) {
       const limit = Number(tbody.dataset.limit || '5');
@@ -301,6 +311,19 @@
           this.setAttribute('aria-expanded', 'true');
           panel.hidden = false;
           this.querySelector('.accordion-icon').textContent = '−';
+        }
+      });
+    });
+
+    deleteMonthForms.forEach((form) => {
+      form.addEventListener('submit', function (event) {
+        const monthName = this.dataset.monthName || 'este mes';
+        const recordCount = this.dataset.recordCount || '0';
+        const ok = window.confirm(
+          `Se eliminarán ${recordCount} registro(s) de ${monthName}. Esta acción no se puede deshacer. ¿Deseas continuar?`
+        );
+        if (!ok) {
+          event.preventDefault();
         }
       });
     });

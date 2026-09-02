@@ -123,21 +123,31 @@
           shownAt = Date.now();
         }
 
+        function hideOverlay() {
+          if (!overlay) return;
+          overlay.classList.remove("is-active");
+          overlay.setAttribute("aria-hidden", "true");
+          document.querySelectorAll(".btn-loading").forEach(function (btn) {
+            btn.classList.remove("btn-loading");
+            btn.disabled = false;
+          });
+        }
+
         function scheduleHide() {
           if (!overlay) return;
           var elapsed = shownAt ? Date.now() - shownAt : LOADING_MIN_MS;
           var remaining = Math.max(LOADING_MIN_MS - elapsed, 0);
           clearTimeout(hideTimer);
-          hideTimer = setTimeout(function () {
-            overlay.classList.remove("is-active");
-            overlay.setAttribute("aria-hidden", "true");
-            // Re-habilitar botones
-            document.querySelectorAll(".btn-loading").forEach(function (btn) {
-              btn.classList.remove("btn-loading");
-              btn.disabled = false;
-            });
-          }, remaining);
+          hideTimer = setTimeout(hideOverlay, remaining);
         }
+
+        // Cuando el navegador restaura la página desde bfcache, resetear el overlay
+        window.addEventListener("pageshow", function (event) {
+          if (event.persisted) {
+            clearTimeout(hideTimer);
+            hideOverlay();
+          }
+        });
 
         var SUBMIT_BUTTONS = [
           { selector: "button[type='submit'].btn-primary", label: "Procesando..." },

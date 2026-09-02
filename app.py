@@ -17,6 +17,13 @@ import calendar
 from datetime import date, datetime, timedelta
 from typing import Optional, cast
 
+# Carga variables del archivo .env antes de cualquier otra configuración
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv opcional; las variables de entorno del SO tienen prioridad
+
 import pandas as pd
 from flask import (
     Flask,
@@ -64,13 +71,15 @@ INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
 PENDING_DIR = os.path.join(INSTANCE_DIR, "pending")
 os.makedirs(PENDING_DIR, exist_ok=True)
 
-app = Flask(__name__)
+app = Flask(__name__, instance_relative_config=True)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "calculadora-sueldos-dev-secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(
     INSTANCE_DIR, "sueldos.db"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
+# Carga instance/config.py (sobreescribe los valores anteriores si existe)
+app.config.from_pyfile("config.py", silent=True)
 
 db.init_app(app)
 
@@ -2102,6 +2111,44 @@ def descargar_mes(empleado_id, year, month):
     )
 
 
+@app.route(
+    "/empleado/<int:empleado_id>/eliminar_mes/<int:year>/<int:month>",
+    methods=["POST"],
+    endpoint="eliminar_mes_nomina",
+)
+def eliminar_mes_nomina(empleado_id, year, month):
+    empleado = db.session.get(Employee, empleado_id)
+    if not empleado:
+        flash("El empleado no existe o ya fue eliminado.", "error")
+        return redirect(url_for("index"))
+
+    if not (1 <= month <= 12):
+        flash("Mes inválido.", "error")
+        return redirect(url_for("ver_empleado", empleado_id=empleado_id))
+
+    registros = (
+        EmployeePayroll.query.filter_by(employee_id=empleado_id)
+        .order_by(desc(EmployeePayroll.created_at))
+        .all()
+    )
+    registros_mes = _filtrar_registros_por_mes(registros, year, month)
+
+    if not registros_mes:
+        flash("No se encontraron registros para el mes seleccionado.", "warning")
+        return redirect(url_for("ver_empleado", empleado_id=empleado_id))
+
+    total_eliminados = len(registros_mes)
+    for registro in registros_mes:
+        db.session.delete(registro)
+    db.session.commit()
+
+    flash(
+        f"Se eliminaron {total_eliminados} registro(s) de {_mes_es(month)} {year}.",
+        "success",
+    )
+    return redirect(url_for("ver_empleado", empleado_id=empleado_id))
+
+
 @app.route("/empleado/<int:empleado_id>/eliminar", methods=["POST"])
 def eliminar_empleado(empleado_id):
     empleado = db.session.get(Employee, empleado_id)
@@ -2645,4 +2692,5 @@ with app.app_context():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    # use_reloader=False evita que el reloader mate requests activos al detectar cambios en .pyc
+    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)

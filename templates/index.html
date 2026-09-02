@@ -214,7 +214,7 @@
       if (!removeButton) return;
       const index = Number(removeButton.dataset.index);
       const nuevos = Array.from(selectedPdfs.files).filter((_, idx) => idx !== index);
-      selectedPdfs.clearData();
+      selectedPdfs.items.clear();
       nuevos.forEach((file) => selectedPdfs.items.add(file));
       updatePdfFiles();
     });
