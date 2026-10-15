@@ -357,6 +357,20 @@ select:focus {
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
+.hour-rate-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.hour-rate-controls .input-money {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.hour-rate-controls .btn {
+  flex-shrink: 0;
+}
+
 .input-money {
   position: relative;
 }
